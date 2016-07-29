@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 use strict;
+use warnings;
 
 =head1 NAME
 
@@ -29,54 +30,56 @@ use strict;
 use vars qw( %conf );
 use FindBin '$Bin';
 
-my $ARGV    = parse_arguments(\@ARGV);
-my $VERSION = 0.71;
+my $ARGUMENTS = parse_arguments(\@ARGV);
+my $VERSION   = 0.72;
 
 #DB information
 
-my $dbhost   = $ARGV->{DB_HOST}     || "127.0.0.1";
-my $dbname   = $ARGV->{DB_NAME}     || "abills";
-my $dbuser   = $ARGV->{DB_USER}     || "root";
-my $dbpasswd = $ARGV->{DB_PASSWORD} || "";
-my $dbtype   = $ARGV->{DB_TYPE}     || "mysql";       #Pg
-my $encryption_key = $ARGV->{PASSSWD_ENCRYPTION_KEY};
+my $dbhost   = $ARGUMENTS->{DB_HOST}     || "127.0.0.1";
+my $dbname   = $ARGUMENTS->{DB_NAME}     || "abills";
+my $dbuser   = $ARGUMENTS->{DB_USER}     || "root";
+my $dbpasswd = $ARGUMENTS->{DB_PASSWORD} || "";
+my $dbtype   = $ARGUMENTS->{DB_TYPE}     || "mysql";       #Pg
+my $encryption_key = $ARGUMENTS->{PASSSWD_ENCRYPTION_KEY};
 
-if (defined($ARGV->{'help'}) || $#ARGV < 0) {
+if (defined($ARGUMENTS->{'help'}) || $#ARGV < 0) {
   help();
   exit 0;
 }
 
-my $import_file      = $ARGV->{IMPORT_FILE}      || '';
-my $default_password = $ARGV->{DEFAULT_PASSWORD} || 'xxxx';
-my $email_export     = $ARGV->{EMAIL_CREATE}     || 1;
-my $email_domain_id  = $ARGV->{EMAIL_DOMAIN}     || 1;
-my $debug            = $ARGV->{DEBUG}            || 0;
-my $no_deposit       = $ARGV->{NO_DEPOSIT}       || 0;
-my $exchange_rate    = $ARGV->{EXCHANGE_RATE}    || 0;
-my $format = ($ARGV->{'HTML'}) ? 'html' : '';
+my $IMPORT_FILE      = $ARGUMENTS->{IMPORT_FILE}      || '';
+my $FILE_FIELDS      = $ARGUMENTS->{FILE_FIELDS}      || '';
+my $DEFAULT_PASSWORD = $ARGUMENTS->{DEFAULT_PASSWORD} || 'xxxx';
+my $email_export     = $ARGUMENTS->{EMAIL_CREATE}     || 1;
+my $EMAIL_DOMAIN_ID  = $ARGUMENTS->{EMAIL_DOMAIN}     || 1;
+my $DEBUG            = $ARGUMENTS->{DEBUG}            || 0;
+my $no_deposit       = $ARGUMENTS->{NO_DEPOSIT}       || 0;
+my $EXCHANGE_RATE    = $ARGUMENTS->{EXCHANGE_RATE}    || 0;
+my $FORMAT = ($ARGUMENTS->{'HTML'}) ? 'html' : '';
+my $SYNC_DEPOSIT = $ARGUMENTS->{SYNC_DEPOSIT} || 0;
 
 my %EXTENDED_STATIC_FIELDS = ();
 
-while (my ($k, $v) = each(%$ARGV)) {
+while (my ($k, $v) = each(%$ARGUMENTS)) {
   if ($k =~ /^(\d)\./) {
     $EXTENDED_STATIC_FIELDS{$k} = $v;
-    print "Extended: $k -> $v\n" if ($debug > 1);
+    print "Extended: $k -> $v\n" if ($DEBUG > 1);
   }
 }
 
-my $db;
+my DBI $db;
 
-if ($ARGV->{ADD_NAS}) {
+if ($ARGUMENTS->{ADD_NAS}) {
   add_nas();
   exit;
 }
 
-if ($ARGV->{FROM}) {
-  if ($ARGV->{FROM} eq 'stargazer_pg') {
+if ($ARGUMENTS->{FROM}) {
+  if ($ARGUMENTS->{FROM} eq 'stargazer_pg') {
     $dbtype = 'Pg';
   }
-  elsif ($ARGV->{FROM} eq 'odbc' || $ARGV->{FROM} eq 'carbon4') {
-    $dbtype  = 'ODBC';
+  elsif ($ARGUMENTS->{FROM} eq 'odbc' || $ARGUMENTS->{FROM} eq 'carbon4') {
+    $dbtype = 'ODBC';
     my $db_dsn = 'MSSQL';
 
     eval { require DBD::ODBC; };
@@ -87,29 +90,29 @@ if ($ARGV->{FROM}) {
     }
     DBD::ODBC->import();
 
-    if ($ARGV->{FROM} eq 'carbon4'){
+    if ($ARGUMENTS->{FROM} eq 'carbon4') {
       $db = get_connection_to_firebird_host($dbhost, '/var/db/ics_main.gdb', $dbpasswd);
     }
     else {
-      $db = DBI->connect( "dbi:ODBC:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd" )
-        or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
+      $db = DBI->connect("dbi:ODBC:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
+      or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
     }
+
+  }
+  else {
+    $db = DBI->connect("dbi:$dbtype:dbname=$dbname;host=$dbhost", "$dbuser", "$dbpasswd")
+    || die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
   }
 }
-else {
-  $db = DBI->connect("dbi:$dbtype:dbname=$dbname;host=$dbhost", "$dbuser", "$dbpasswd")
-   || die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
-}
 
-if ($ARGV->{DB_CHARSET}) {
-  $db->do("set names $ARGV->{DB_CHARSET}");
+if ($ARGUMENTS->{DB_CHARSET}) {
+  $db->do("set names $ARGUMENTS->{DB_CHARSET}");
 }
-
 
 #Tarif migration section
 my %TP_MIGRATION = ();
-if ($ARGV->{TP_MIGRATION}) {
-  my $rows = file_content($ARGV->{TP_MIGRATION});
+if ($ARGUMENTS->{TP_MIGRATION}) {
+  my $rows = file_content($ARGUMENTS->{TP_MIGRATION});
 
   foreach my $line (@$rows) {
     my ($old, $new) = split(/=/, $line, 2);
@@ -117,127 +120,134 @@ if ($ARGV->{TP_MIGRATION}) {
   }
 }
 
-my $info_logins;
+my $INFO_LOGINS;
 
-if ($ARGV->{FROM}) {
-  if ($ARGV->{FROM} eq 'freenibs') {
-    $info_logins = get_freenibs_users();
+if ($ARGUMENTS->{FROM}) {
+  if ($ARGUMENTS->{FROM} eq 'freenibs') {
+    $INFO_LOGINS = get_freenibs_users();
   }
-  elsif ($ARGV->{FROM} eq 'mabill') {
-    $info_logins = get_freenibs_users({ MABILL => 1 });
+  elsif ($ARGUMENTS->{FROM} eq 'mabill') {
+    $INFO_LOGINS = get_freenibs_users({ MABILL => 1 });
   }
-  elsif ($ARGV->{FROM} eq 'utm4') {
-    $info_logins = get_utm4_users();
+  elsif ($ARGUMENTS->{FROM} eq 'utm4') {
+    $INFO_LOGINS = get_utm4_users();
   }
-  elsif ($ARGV->{FROM} eq 'utm5') {
-    $info_logins = get_utm5_users();
+  elsif ($ARGUMENTS->{FROM} eq 'utm5') {
+    $INFO_LOGINS = get_utm5_users();
   }
-  elsif ($ARGV->{FROM} eq 'utm5cards') {
+  elsif ($ARGUMENTS->{FROM} eq 'utm5cards') {
     utm5cards();
     exit;
   }
-  elsif ($ARGV->{FROM} eq 'utm5pg') {
-    $info_logins = get_utm5pg_users();
+  elsif ($ARGUMENTS->{FROM} eq 'utm5pg') {
+    $INFO_LOGINS = get_utm5pg_users();
   }
-  elsif ($ARGV->{FROM} eq 'unisys') {
-    $info_logins = get_unisys();
+  elsif ($ARGUMENTS->{FROM} eq 'unisys') {
+    $INFO_LOGINS = get_unisys();
   }
-  elsif ($ARGV->{FROM} eq 'file') {
-    $info_logins = get_file();
+  elsif ($ARGUMENTS->{FROM} eq 'file') {
+    if ($SYNC_DEPOSIT) {
+      $FILE_FIELDS = 'LOGIN,NEW_SUM';
+      $IMPORT_FILE = $SYNC_DEPOSIT;
+      $INFO_LOGINS = get_file();
+      sync_deposit($INFO_LOGINS);
+      exit 0;
+    }
+    else {
+      $INFO_LOGINS = get_file();
+    }
   }
-  elsif ($ARGV->{FROM} eq 'abills') {
-    $info_logins = get_abills();
+  elsif ($ARGUMENTS->{FROM} eq 'abills') {
+    $INFO_LOGINS = get_abills();
   }
-  elsif ($ARGV->{FROM} eq 'mikbill') {
-    $info_logins = get_mikbill();
+  elsif ($ARGUMENTS->{FROM} eq 'mikbill') {
+    $INFO_LOGINS = get_mikbill();
   }
-  elsif ($ARGV->{FROM} eq 'mikbill_deleted') {
-    $info_logins = get_mikbill_deleted();
+  elsif ($ARGUMENTS->{FROM} eq 'mikbill_deleted') {
+    $INFO_LOGINS = get_mikbill_deleted();
   }
-  elsif ($ARGV->{FROM} eq 'mikbill_blocked') {
-    $info_logins = get_mikbill_blocked();
+  elsif ($ARGUMENTS->{FROM} eq 'mikbill_blocked') {
+    $INFO_LOGINS = get_mikbill_blocked();
   }
-  elsif ($ARGV->{FROM} eq 'nodeny') {
-    $info_logins = get_nodeny();
+  elsif ($ARGUMENTS->{FROM} eq 'nodeny') {
+    $INFO_LOGINS = get_nodeny();
   }
-  elsif ($ARGV->{FROM} eq 'traffpro') {
-    $info_logins = get_traffpro();
+  elsif ($ARGUMENTS->{FROM} eq 'traffpro') {
+    $INFO_LOGINS = get_traffpro();
   }
-  elsif ($ARGV->{FROM} eq 'stargazer') {
-    $info_logins = get_stargazer();
+  elsif ($ARGUMENTS->{FROM} eq 'stargazer') {
+    $INFO_LOGINS = get_stargazer();
   }
-  elsif ($ARGV->{FROM} eq 'stargazer_pg') {
-    $info_logins = get_stargazer_pg();
+  elsif ($ARGUMENTS->{FROM} eq 'stargazer_pg') {
+    $INFO_LOGINS = get_stargazer_pg();
   }
-  elsif ($ARGV->{FROM} eq 'easyhotspot') {
-    $info_logins = get_easyhotspot();
+  elsif ($ARGUMENTS->{FROM} eq 'easyhotspot') {
+    $INFO_LOGINS = get_easyhotspot();
   }
-  elsif ($ARGV->{FROM} eq 'bbilling') {
-    $info_logins = get_bbilling();
+  elsif ($ARGUMENTS->{FROM} eq 'bbilling') {
+    $INFO_LOGINS = get_bbilling();
   }
-  elsif ($ARGV->{FROM} eq 'lms') {
-    $info_logins = get_lms();
+  elsif ($ARGUMENTS->{FROM} eq 'lms') {
+    $INFO_LOGINS = get_lms();
   }
-  elsif ($ARGV->{FROM} eq 'lms_nodes') {
-    $info_logins = get_lms_nodes();
+  elsif ($ARGUMENTS->{FROM} eq 'lms_nodes') {
+    $INFO_LOGINS = get_lms_nodes();
   }
-  elsif ($ARGV->{FROM} eq 'odbc') {
-    $info_logins = get_odbc();
+  elsif ($ARGUMENTS->{FROM} eq 'odbc') {
+    $INFO_LOGINS = get_odbc();
   }
-  elsif ($ARGV->{FROM} eq 'carbon4'){
-    $info_logins = get_carbon4();
+  elsif ($ARGUMENTS->{FROM} eq 'carbon4') {
+    $INFO_LOGINS = get_carbon4();
   }
 
-  show($info_logins);
+  show($INFO_LOGINS);
 }
 
-if  ($db) {
+if ($db) {
   $db->disconnect();
   $db = undef;
 }
 
-
-
 #**************************************************
 # ADD_NAS=file FIELDS=NAS_NAME,MAC
 #
-#Felds: 
+#Felds:
 # NAS_NAME
 # IP
 # MAC
-# NAS_IDENTIFIER 
+# NAS_IDENTIFIER
 # NAS_DESCRIBE
-# NAS_AUTH_TYPE  
+# NAS_AUTH_TYPE
 # NAS_MNG_IP_PORT
-# NAS_MNG_USER 
+# NAS_MNG_USER
 # NAS_MNG_PASSWORD
 # NAS_RAD_PAIRS
-# NAS_ALIVE 
-# NAS_DISABLE 
+# NAS_ALIVE
+# NAS_DISABLE
 # NAS_EXT_ACCT
 #
 #**************************************************
 sub add_nas {
   my ($attr) = @_;
-  
-  if (! $ARGV->{FILE_FIELDS}) {
+
+  if (!$FILE_FIELDS) {
     print "Specify fields FILE_FIELDS=... \n";
     exit;
   }
-  
-  $ARGV->{FILE_FIELDS} =~ s/\s//g;
-  my @fiealds_arr = split(/,/, $ARGV->{FILE_FIELDS});
-  
-  my $arr = file_content($ARGV->{ADD_NAS});
+
+  $FILE_FIELDS =~ s/\s//g;
+  my @fiealds_arr = split(/,/, $FILE_FIELDS);
+
+  my $arr          = file_content($ARGUMENTS->{ADD_NAS});
   my @add_arr_hash = ();
-  
-  foreach my $line ( @$arr ) {
-    print "$line\n" if ($debug > 3); 
+
+  foreach my $line (@$arr) {
+    print "$line\n" if ($DEBUG > 3);
     my @val_arr = split(/\t/, $line);
 
     my %val_hash = ();
-    for(my $i=0; $i<= $#val_arr; $i++) {
-      $val_hash{$fiealds_arr[$i]}=$val_arr[$i];
+    for (my $i = 0 ; $i <= $#val_arr ; $i++) {
+      $val_hash{ $fiealds_arr[$i] } = $val_arr[$i];
     }
 
     push @add_arr_hash, \%val_hash;
@@ -259,35 +269,35 @@ sub add_nas {
   require Dhcphosts;
   Dhcphosts->import();
 
-  if ($debug > 3) {
+  if ($DEBUG > 3) {
     print "DB info:
      dbtype: $conf{dbtype}
      dbhost: $conf{dbhost}
-     dbname: $conf{dbname} 
-     dbuser: $conf{dbuser} 
+     dbname: $conf{dbname}
+     dbuser: $conf{dbuser}
      dbpasswd: $conf{dbpasswd}
     ";
   }
 
   my $abills_db = Abills::SQL->connect($conf{dbtype}, $conf{dbhost}, $conf{dbname}, $conf{dbuser}, $conf{dbpasswd}, { CHARSET => ($conf{dbcharset}) ? $conf{dbcharset} : undef });
 
-  my $admin       = Admins->new($abills_db, \%conf);
+  my $admin = Admins->new($abills_db, \%conf);
   $admin->info($conf{SYSTEM_ADMIN_ID}, { IP => '127.0.0.1' });
-  my $Dhcphosts   = Dhcphosts->new($abills_db, $admin, \%conf);
-  $admin->{MODULE}='';
-  my $Nas         = Nas->new($abills_db, \%conf);
-  
-  if ($debug > 5) {
-    return 0; 
+  my $Dhcphosts = Dhcphosts->new($abills_db, $admin, \%conf);
+  $admin->{MODULE} = '';
+  my $Nas = Nas->new($abills_db, \%conf);
+
+  if ($DEBUG > 5) {
+    return 0;
   }
-  elsif($debug > 2) {
-    $Nas->{debug}=1; 
+  elsif ($DEBUG > 2) {
+    $Nas->{debug} = 1;
   }
 
-  for(my $i=0; $i<=$#add_arr_hash; $i++) {
-    if ($debug > 2) {
+  for (my $i = 0 ; $i <= $#add_arr_hash ; $i++) {
+    if ($DEBUG > 2) {
       print "$i - ";
-      for(my $if=0; $if<=$#fiealds_arr; $if++) {
+      for (my $if = 0 ; $if <= $#fiealds_arr ; $if++) {
         print "$fiealds_arr[$if]:$add_arr_hash[$i]->{$fiealds_arr[$if]}  ";
       }
       print "\n";
@@ -299,8 +309,8 @@ sub add_nas {
 
     $Nas->list({ NAS_IP => $add_arr_hash[$i]->{NAS_IP} || '0.0.0.0' });
     if ($Nas->{TOTAL}) {
-      print "Exist add nas_identifier\n" if ($debug>3);
-      $add_arr_hash[$i]->{NAS_IDENTIFIER}='NAS_'. + ($Nas->{TOTAL} + 1); 
+      print "Exist add nas_identifier\n" if ($DEBUG > 3);
+      $add_arr_hash[$i]->{NAS_IDENTIFIER} = 'NAS_' . +($Nas->{TOTAL} + 1);
     }
 
     $Nas->list($add_arr_hash[$i]);
@@ -311,11 +321,10 @@ sub add_nas {
 
     $Nas->add($add_arr_hash[$i]);
     if ($Nas->{errno}) {
-      print  "[$Nas->{errno}] $Nas->{errstr}\n";
-      exit; 
+      print "[$Nas->{errno}] $Nas->{errstr}\n";
+      exit;
     }
   }
-
 
 }
 
@@ -325,8 +334,8 @@ sub add_nas {
 sub mac_former {
   my ($mac) = @_;
 
-  if (! $mac ) {
-    $mac ='00:00:00:00:00:00';
+  if (!$mac) {
+    $mac = '00:00:00:00:00:00';
   }
   elsif ($mac =~ m/([0-9a-f]{2})([0-9a-f]{2})\.([0-9a-f]{2})([0-9a-f]{2})\.([0-9a-f]{2})([0-9a-f]{2})/i) {
     $mac = "$1:$2:$3:$4:$5:$6";
@@ -341,21 +350,21 @@ sub mac_former {
 
   }
 
-  return $mac
+  return $mac;
 }
 
 #**************************************************
 #
 #**************************************************
 sub file_content {
-  my ($filename)  = @_;
+  my ($filename) = @_;
 
   my $content = '';
 
   open(my $fh, "$filename") || die "Can't open file '$filename' $! \n";
-    while (<$fh>) {
-      $content .= $_;
-    }
+  while (<$fh>) {
+    $content .= $_;
+  }
   close($fh);
 
   my @arr = split(/[\r]?\n/, $content);
@@ -364,15 +373,17 @@ sub file_content {
 }
 
 #**********************************************************
+
 =head2 get_connection_to_firebird_host($server, $db_name, $password) - connect to remote Firebird DB
 
 =cut
+
 #**********************************************************
 sub get_connection_to_firebird_host {
   my ($server, $db_name, $password) = @_;
 
-  my $driver = "libOdbcFb.so"; # имя ODBC драйвера, скачан с официального сайта Firebird
-  my $user = "sysdba"; # логин
+  my $driver = "libOdbcFb.so";    # имя ODBC драйвера, скачан с официального сайта Firebird
+  my $user   = "sysdba";          # логин
 
   my %DSN = (
     ODBC => {
@@ -384,8 +395,7 @@ sub get_connection_to_firebird_host {
   my $connect = "dbi:$DSN{ODBC}{'mode'}(RaiseError=>0, PrintError=>1, Taint=>0):$DSN{ODBC}{'dsn'}";
 
   #  print "Connect string : " . $connect . "\n";
-  my $dbhandler = DBI->connect( $connect,
-    { PrintError => 1, AutoCommit => 0, ReadOnly => 1 } ) || die( "Can't connect: $DBI::errstr" );
+  my $dbhandler = DBI->connect($connect, { PrintError => 1, AutoCommit => 0, ReadOnly => 1 }) || die("Can't connect: $DBI::errstr");
 
   $dbhandler->{LongReadLen} = 512 * 1024;
   $dbhandler->{LongTruncOk} = 1;
@@ -493,12 +503,12 @@ sub get_abills {
   my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT u.id, DECODE(u.password, 'test12345678901234567890') AS password,
-  pi.fio as fio, 
-  if(company.id IS NULL,b.deposit,cb.deposit) AS deposit, 
-  if(u.company_id=0, u.credit, if (u.credit=0, company.credit, u.credit)) AS credit, 
-  u.disable as disable, 
-  u.company_id as company_id, 
-  u.activate, 
+  pi.fio as fio,
+  if(company.id IS NULL,b.deposit,cb.deposit) AS deposit,
+  if(u.company_id=0, u.credit, if (u.credit=0, company.credit, u.credit)) AS credit,
+  u.disable as disable,
+  u.company_id as company_id,
+  u.activate,
   u.expire,
   pi.phone,
   pi.email,
@@ -523,14 +533,14 @@ sub get_abills {
   u.registration,
   pi.comments,
   u.id
-   FROM users u 
-   LEFT JOIN users_pi pi ON (u.uid = pi.uid) 
-   LEFT JOIN bills b ON (u.bill_id = b.id) 
-   LEFT JOIN companies company ON (u.company_id=company.id) 
-   LEFT JOIN bills cb ON (company.bill_id=cb.id) 
+   FROM users u
+   LEFT JOIN users_pi pi ON (u.uid = pi.uid)
+   LEFT JOIN bills b ON (u.bill_id = b.id)
+   LEFT JOIN companies company ON (u.company_id=company.id)
+   LEFT JOIN bills cb ON (company.bill_id=cb.id)
    LEFT JOIN dv_main dv ON (u.uid=dv.uid)
    GROUP BY u.id";
-  print "$sql\n" if ($debug > 0);
+  print "$sql\n" if ($DEBUG > 0);
 
   # return 0;
 
@@ -544,7 +554,7 @@ sub get_abills {
     my $LOGIN = $row[0];
     $logins_hash{$LOGIN}{LOGIN} = $row[0];
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
       }
       $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
@@ -578,14 +588,14 @@ sub utm5cards {
   <card id='20297' secret='531258306760' balance='25.0' currency='980' expire_date='31.12.2010' usage_date='��� ���' tp_id='0' />
  </pool>
 </UTM>
-=cut	
+=cut
 
-  if ($import_file eq '') {
+  if ($IMPORT_FILE eq '') {
     print "Select UTM5 Cards file\n";
     exit;
   }
 
-  my $arr = file_content($import_file);
+  my $arr = file_content($IMPORT_FILE);
 
   require "/usr/abills/libexec/config.pl";
 
@@ -623,8 +633,8 @@ sub utm5cards {
   }
 
   foreach my $line (@sql_arr) {
-    print $line. "\n" if ($debug > 1);
-    if ($debug < 5) {
+    print $line. "\n" if ($DEBUG > 1);
+    if ($DEBUG < 5) {
       $db->do("$line");
     }
   }
@@ -636,7 +646,7 @@ sub utm5cards {
 sub get_file {
   my @FILE_FIELDS = ('3.CONTRACT_ID', '3.FIO', 'LOGIN', 'PASSWORD', '3.ADDRESS_STREET', '4.IP', '3.COMMENTS', '5.SUM', '4.TP_ID', '3.PHONE',);
 
-  @FILE_FIELDS = split(/,/, $ARGV->{FILE_FIELDS});
+  @FILE_FIELDS = split(/,/, $FILE_FIELDS);
 
   #$FILE_FIELDS[0] = 'LOGIN';
   #$FILE_FIELDS[1] = 'PASSWORD';
@@ -645,7 +655,7 @@ sub get_file {
   my %TARIFS_HASH = ();
   my $TP_ID       = 0;
 
-  my $rows = file_content($import_file);
+  my $rows = file_content($IMPORT_FILE);
 
   foreach my $line (@$rows) {
     my @cels      = split(/\t/, $line);
@@ -653,13 +663,13 @@ sub get_file {
     my $COMMENTS  = '';
     my $cel_phone = '';
 
-    print $line if ($debug > 4);
+    print $line if ($DEBUG > 4);
 
     for (my $i = 0 ; $i <= $#cels ; $i++) {
       next if (!$FILE_FIELDS[$i]);
 
       $tmp_hash{ $FILE_FIELDS[$i] } = $cels[$i];
-      print "$i/$FILE_FIELDS[$i] - $cels[$i]\n" if ($debug > 0);
+      print "$i/$FILE_FIELDS[$i] - $cels[$i]\n" if ($DEBUG > 0);
 
       if ($tmp_hash{ $FILE_FIELDS[$i] } =~ /^(\d{2})[-.](\d{2})[-.](\d{4})$/) {
         $tmp_hash{ $FILE_FIELDS[$i] } = "$3-$2-$1";
@@ -677,8 +687,8 @@ sub get_file {
       }
       elsif ($FILE_FIELDS[$i] eq '5.SUM') {
         $tmp_hash{ $FILE_FIELDS[$i] } =~ s/,/./g;
-        if ($exchange_rate > 0) {
-          $tmp_hash{ $FILE_FIELDS[$i] } = $tmp_hash{ $FILE_FIELDS[$i] } * $exchange_rate;
+        if ($EXCHANGE_RATE > 0) {
+          $tmp_hash{ $FILE_FIELDS[$i] } = $tmp_hash{ $FILE_FIELDS[$i] } * $EXCHANGE_RATE;
         }
       }
       elsif ($FILE_FIELDS[$i] eq '4.TP') {
@@ -713,15 +723,15 @@ sub get_file {
     }
 
     $logins_hash{ $tmp_hash{'LOGIN'} } = \%tmp_hash;
-    print "=====================\n" if ($debug > 0);
+    print "=====================\n" if ($DEBUG > 0);
   }
 
-  if ($debug > 1) {
+  if ($DEBUG > 1) {
     while (my ($k, $v) = each %TARIFS_HASH) {
       print "$k  -> $v\n";
     }
 
-    exit if ($debug > 5);
+    exit if ($DEBUG > 5);
   }
 
   return \%logins_hash;
@@ -791,7 +801,7 @@ sub get_utm4_users {
   my $fields_list = "id, " . join(", \n", values(%fields));
 
   my $sql = "SELECT $fields_list FROM users";
-  print "$sql\n" if ($debug > 0);
+  print "$sql\n" if ($DEBUG > 0);
 
   my $q = $db->prepare($sql);
   $q->execute();
@@ -804,7 +814,7 @@ sub get_utm4_users {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
       }
 
@@ -914,21 +924,21 @@ sub get_utm5_users {
   LEFT JOIN tariffs t9 ON (atl.tariff_id = t9.id and t9.is_deleted  <> '1')
   LEFT JOIN groups t11 ON (t11.id = gl.group_id)
   LEFT JOIN houses t12 ON (t12.id = u.house_id)
-  
+
   WHERE u.id=ua.uid
   and ua.account_id=a.id
   and a.is_deleted=0
   GROUP BY u.login
   ORDER BY 1
 
- 
+
 ";
 
-  if ($debug > 5) {
+  if ($DEBUG > 5) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -942,7 +952,7 @@ sub get_utm5_users {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i <= $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -1044,21 +1054,21 @@ sub get_utm5pg_users {
 password, balance,  comments,
 COALESCE(to_char(TIMESTAMP WITH TIME ZONE 'epoch' + dp.start_date * interval '1 second', 'YYYY-MM-DD'), '0000-00-00'),
 house_id, TIMESTAMP WITH TIME ZONE 'epoch' + u.create_date * interval '1 second', login, COALESCE(u.is_blocked, 0) as disable, credit,
-passport,  COALESCE(u.email, '') as email, flat_number,  actual_address,	COALESCE(gl.group_id, 0) as gid, 
+passport,  COALESCE(u.email, '') as email, flat_number,  actual_address,	COALESCE(gl.group_id, 0) as gid,
 COALESCE(atl.tariff_id, 0) AS TP, full_name, home_telephone
 FROM accounts a  INNER JOIN users_accounts ua ON a.id = ua.account_id
 INNER JOIN users u ON ua.uid = u.id
-LEFT JOIN users_groups_link gl ON (u.id=gl.user_id)     
-LEFT JOIN account_tariff_link atl ON (a.id=atl.account_id and atl.is_deleted=0) 
-LEFT JOIN discount_periods dp ON (atl.discount_period_id=dp.id)  
-LEFT JOIN user_contacts uc ON (u.id=uc.uid)  
+LEFT JOIN users_groups_link gl ON (u.id=gl.user_id)
+LEFT JOIN account_tariff_link atl ON (a.id=atl.account_id and atl.is_deleted=0)
+LEFT JOIN discount_periods dp ON (atl.discount_period_id=dp.id)
+LEFT JOIN user_contacts uc ON (u.id=uc.uid)
 ORDER BY u.login";
 
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
 
@@ -1073,7 +1083,7 @@ ORDER BY u.login";
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -1145,7 +1155,7 @@ sub get_freenibs_users {
 
   if ($attr->{MABILL}) {
     $fields{'4.SPEED'}    = 'speed';
-    $fields{'6.USERNAME'} = 'email', $fields{'6.DOMAINS_SEL'} = $email_domain_id || 0;
+    $fields{'6.USERNAME'} = 'email', $fields{'6.DOMAINS_SEL'} = $EMAIL_DOMAIN_ID || 0;
     $fields{'PASSWORD'}   = 'if(crypt_method=1, email_pass, password)';
 
     #  '6.COMMENTS'        => '',
@@ -1162,7 +1172,7 @@ sub get_freenibs_users {
   my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT $fields_list FROM users";
-  print "$sql\n" if ($debug > 0);
+  print "$sql\n" if ($DEBUG > 0);
 
   my $q = $db->prepare($sql);
   $q->execute();
@@ -1175,7 +1185,7 @@ sub get_freenibs_users {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
       }
 
@@ -1206,7 +1216,7 @@ sub show {
   my $counts = 0;
   my $output = '';
 
-  print "Output format: $format\n" if ($debug > 1);
+  print "Output format: $FORMAT\n" if ($DEBUG > 1);
 
   my %exaption = (
     'LOGIN'    => 1,
@@ -1218,11 +1228,11 @@ sub show {
 
   @titls = sort keys %{ $logins_info->{$login} };
 
-  if ($ARGV->{LOGIN2UID} && ! $logins_info->{$login}{'1.UID'} ) {
+  if ($ARGUMENTS->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
     push @titls, '1.UID';
   }
 
-  if ($format eq 'html') {
+  if ($FORMAT eq 'html') {
     $output = "<table border=1>\n" . "<tr><th>LOGIN</th>
 	<th>PASSWORD</th>\n";
 
@@ -1234,15 +1244,16 @@ sub show {
   }
 
   foreach $login (sort keys %$logins_info) {
+
     #add login to uid
-    if ($ARGV->{LOGIN2UID} && ! $logins_info->{$login}{'1.UID'} ) {
-      $logins_info->{$login}{'1.UID'}=$login;
+    if ($ARGUMENTS->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
+      $logins_info->{$login}{'1.UID'} = $login;
     }
 
-    next if (! $login);
-    print "$login\n" if ($debug > 0);
+    next if (!$login);
+    print "$login\n" if ($DEBUG > 0);
 
-    if ($format eq 'html') {
+    if ($FORMAT eq 'html') {
       $output .= "<tr><td>$logins_info->{$login}{'LOGIN'}</td><td>$logins_info->{$login}{'PASSWORD'}</td>";
       foreach my $column_title (@titls) {
         if (!$column_title) {
@@ -1255,8 +1266,7 @@ sub show {
       $output .= "</tr>\n";
     }
     else {
-      $output .= "$logins_info->{$login}{'LOGIN'}\t".
-                 (($logins_info->{$login}{'PASSWORD'}) ? $logins_info->{$login}{'PASSWORD'} : '') ."\t";
+      $output .= "$logins_info->{$login}{'LOGIN'}\t" . (($logins_info->{$login}{'PASSWORD'}) ? $logins_info->{$login}{'PASSWORD'} : '') . "\t";
 
       foreach my $column_title (@titls) {
         next if ($exaption{$column_title});
@@ -1264,17 +1274,17 @@ sub show {
         if ($column_title eq '4.TP_ID' && $TP_MIGRATION{ $logins_info->{$login}{$column_title} }) {
           $logins_info->{$login}{$column_title} = $TP_MIGRATION{ $logins_info->{$login}{$column_title} };
         }
-        
+
         #Address full
         if ($column_title eq '3.ADDRESS_FULL') {
-          if ($ARGV->{ADDRESS_DELIMITER}) {
-            my($delimiter1, $delimiter2) = split(/,/, $ARGV->{ADDRESS_DELIMITER}, 2);
+          if ($ARGUMENTS->{ADDRESS_DELIMITER}) {
+            my ($delimiter1, $delimiter2) = split(/,/, $ARGUMENTS->{ADDRESS_DELIMITER}, 2);
 
-            if (! $delimiter2) {
-              $delimiter2 = ''; 
+            if (!$delimiter2) {
+              $delimiter2 = '';
             }
 
-            $logins_info->{$login}{$column_title}=~m/(.+)$delimiter1(.+)$delimiter2(.{0,10})/;
+            $logins_info->{$login}{$column_title} =~ m/(.+)$delimiter1(.+)$delimiter2(.{0,10})/;
 
             my ($ADDRESS_STREET, $ADDRESS_BUILD, $ADDRESS_FLAT) = ($1, $2, $3);
 
@@ -1284,7 +1294,7 @@ sub show {
             else {
               $output .= qq{3.ADDRESS_STREET="$logins_info->{$login}{$column_title}"\t};
             }
-            
+
             if ($ADDRESS_BUILD) {
               $output .= qq{3.ADDRESS_BUILD="$ADDRESS_BUILD"\t};
             }
@@ -1302,14 +1312,14 @@ sub show {
           $output .= "$column_title=\"" . $logins_info->{$login}{$column_title} . "\"\t";
         }
       }
-      
-      if ($ARGV->{SKIP_ERROR_PARAM}) {
+
+      if ($ARGUMENTS->{SKIP_ERROR_PARAM}) {
         $output .= "SKIP_ERRORS=1\t4.DV_SKIP_FEE=1\t";
       }
 
-      if ($ARGV->{ADD_PARAMS}) {
-        $ARGV->{ADD_PARAMS} =~ s/,/\t/g;
-        $output .= "$ARGV->{ADD_PARAMS}\t";
+      if ($ARGUMENTS->{ADD_PARAMS}) {
+        $ARGUMENTS->{ADD_PARAMS} =~ s/,/\t/g;
+        $output .= "$ARGUMENTS->{ADD_PARAMS}\t";
       }
 
       $output .= "\n";
@@ -1318,7 +1328,7 @@ sub show {
     $counts++;
   }
 
-  if ($format eq 'html') {
+  if ($FORMAT eq 'html') {
     $output .= "</table>\n";
   }
 
@@ -1390,15 +1400,15 @@ sub get_unisys {
   my $fields_list = "name, " . join(", \n", values(%fields));
 
   my $sql = "select $fields_list
-  FROM users 
+  FROM users
   ORDER BY 1
 ";
 
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -1412,7 +1422,7 @@ sub get_unisys {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -1475,10 +1485,11 @@ ABillS Migration system Version: $VERSION
                             lms
                             lms_nodes (IP, MAC adresses for lms users)
                             odbc
+    SYNC_DEPOSIT        -  filename to sync deposit ( ./2abills.pl FROM=file SYNC_DEPOSIT=/usr/deposits )
     IMPORT_FILE=[file]  - Tab delimiter file
     FILE_FIELDS=[list,.]- Tab delimiter fields position (FILE_FIELDS=LOGIN,PASSWORD,3.FIO...)
     TP_MIGRATION=[file] - File with TP migration information.
-                          Format: 
+                          Format:
                            old_tp=abills_tp_id
     LOGIN2UID           - Convert login to uid for digit logins
     ADD_NAS             - Add nas servers from file. Fields defined via FILE_FIELDS=... option
@@ -1585,7 +1596,7 @@ sub get_mikbill {
   my %fields_rev = reverse(%fields);
   my $fields_list = "user, " . join(", \n", values(%fields));
 
-  my $sql = "SELECT 
+  my $sql = "SELECT
 user,
 user,
 password,
@@ -1607,15 +1618,15 @@ framed_ip,
 framed_mask,
 gid,
 deposit
-  FROM users 
+  FROM users
   LEFT JOIN lanes_houses h ON ( users.houseid = h.houseid )";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -1629,7 +1640,7 @@ deposit
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i <= $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -1685,7 +1696,7 @@ sub get_mikbill_deleted {
   my %fields_rev = reverse(%fields);
   my $fields_list = "user, " . join(", \n", values(%fields));
 
-  my $sql = "SELECT 
+  my $sql = "SELECT
 user,
 user,
 password,
@@ -1707,15 +1718,15 @@ framed_ip,
 framed_mask,
 gid,
 deposit
-  FROM usersdel 
+  FROM usersdel
   LEFT JOIN lanes_houses h ON ( usersdel.houseid = h.houseid )";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -1729,7 +1740,7 @@ deposit
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i <= $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -1785,7 +1796,7 @@ sub get_mikbill_blocked {
   my %fields_rev = reverse(%fields);
   my $fields_list = "user, " . join(", \n", values(%fields));
 
-  my $sql = "SELECT 
+  my $sql = "SELECT
 user,
 user,
 password,
@@ -1807,15 +1818,15 @@ framed_ip,
 framed_mask,
 gid,
 deposit
-  FROM usersblok 
+  FROM usersblok
   LEFT JOIN lanes_houses h ON ( usersblok.houseid = h.houseid )";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -1829,7 +1840,7 @@ deposit
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i <= $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -1925,11 +1936,11 @@ sub get_nodeny {
   my $sql = "SELECT $fields_list FROM users";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -1943,7 +1954,7 @@ sub get_nodeny {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -2005,19 +2016,19 @@ sub get_traffpro {
   my %fields_rev = reverse(%fields);
   my $fields_list = "login, " . join(", \n", values(%fields));
 
-  my $sql = "SELECT cl.login, 
- 				   pwd.key, 
- 				   cl.login, 
- 				   cl.date, 
+  my $sql = "SELECT cl.login,
+ 				   pwd.key,
+ 				   cl.login,
+ 				   cl.date,
  				   cl.id_groups,
  				   tarif.discount,
- 				   addr.apartment, 				   
+ 				   addr.apartment,
  				   str.name,
  				   addr.house,
  				   addr.comment,
  				   cont.num_contract,
  				   cont.email,
- 				   cont.surname,  #	 cont.surname,	cont.name,  cont.patronymic,   
+ 				   cont.surname,  #	 cont.surname,	cont.name,  cont.patronymic,
  				   cont.phone_mob,
  				   cont.passport_date,
  				   cont.passport_create,
@@ -2028,7 +2039,7 @@ sub get_traffpro {
  				   tarif.speed,
  				   ctcm.traff_tarif,
  				   ctcm.traff_money_add
-			FROM `clients` AS cl 
+			FROM `clients` AS cl
 			LEFT JOIN clients_traff_check_money ctcm ON ( cl.id = ctcm.id )
 			LEFT JOIN bus_tarif_plane tarif ON ( tarif.id = ctcm.traff_tarif )
 			LEFT JOIN clients_addr ca ON ( ca.id = cl.id )
@@ -2039,11 +2050,11 @@ sub get_traffpro {
 			LEFT JOIN clients_vpn pwd ON ( pwd.id = cl.id )";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -2057,7 +2068,7 @@ sub get_traffpro {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i <= $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], |" . $fields_rev{"$query_fields->[$i]"} . "| -> $row[$i] \n";
       }
       print "$i, $query_fields->[$i], |" . $fields_rev{"$query_fields->[$i]"} . "| -> $row[$i] \n";
@@ -2112,11 +2123,11 @@ sub get_stargazer {
   my $sql = "SELECT $fields_list FROM tb_users";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -2130,7 +2141,7 @@ sub get_stargazer {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -2185,16 +2196,16 @@ sub get_stargazer_pg {
   my %fields_rev = reverse(%fields);
   my $fields_list = "name, " . join(", \n", values(%fields));
 
-  my $sql = "SELECT $fields_list 
+  my $sql = "SELECT $fields_list
   FROM tb_users u
   LEFT JOIN tb_allowed_ip ip ON (ip.fk_user=u.pk_user)";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -2208,7 +2219,7 @@ sub get_stargazer_pg {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -2258,11 +2269,11 @@ sub get_bbilling {
   my $sql = "SELECT $fields_list FROM data";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -2276,7 +2287,7 @@ sub get_bbilling {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i < $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -2318,18 +2329,18 @@ sub get_easyhotspot {
 
   my $sql = "SELECT  v.username,
  					v.password,
- 					v.username, 
- 				   	v.password, 
- 				   	b.id 
-			FROM `voucher` AS v 
+ 					v.username,
+ 				   	v.password,
+ 				   	b.id
+			FROM `voucher` AS v
 			LEFT JOIN billingplan b ON ( b.name = v.billingplan )";
 
   #print $sql;
-  if ($debug > 4) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -2343,7 +2354,7 @@ sub get_easyhotspot {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i <= $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], |" . $fields_rev{"$query_fields->[$i]"} . "| -> $row[$i] \n";
       }
       $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i] || '';
@@ -2401,9 +2412,9 @@ sub get_lms {
   #my $fields_list = "id, pin". join(", \n", values(%fields));
 
   my $sql = "select 	c.id as id,
- 					c.id as id, 
+ 					c.id as id,
  					c.pin as pin,
- 					if(ca.customergroupid!=\'\', ca.customergroupid, \'\') as customergroupid, 
+ 					if(ca.customergroupid!=\'\', ca.customergroupid, \'\') as customergroupid,
  					FROM_UNIXTIME(c.creationdate),
  					c.deleted as deleted,
  					if(c.address!=\'\', c.address, \'\'),
@@ -2415,19 +2426,19 @@ sub get_lms {
  					if(c.city!=\'\', c.city, \'\'),
  					if(a.tariffid!=\'\', a.tariffid, \'\')  as tariffplan,
  					if((SELECT SUM(value) FROM cash WHERE customerid=c.id)!=\'\', (SELECT SUM(value) FROM cash WHERE customerid=c.id), \'\')
- 					
+
   FROM (customers c)
   LEFT JOIN assignments a ON (a.customerid=c.id)
   LEFT JOIN customerassignments ca ON (ca.customerid=c.id)
-   
+
   GROUP BY c.id
   ORDER BY 1";
 
-  if ($debug > 5) {
+  if ($DEBUG > 5) {
     print $sql;
     return 0;
   }
-  elsif ($debug > 0) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -2441,7 +2452,7 @@ sub get_lms {
     my $LOGIN = $row[0];
 
     for (my $i = 1 ; $i <= $#row ; $i++) {
-      if ($debug > 3) {
+      if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
@@ -2479,7 +2490,7 @@ sub get_lms_nodes {
 
   my $sql = "select ownerid, inet_ntoa(ipaddr), mac from nodes";
 
-  if ($debug > 0) {
+  if ($DEBUG > 0) {
     print "$sql\n";
   }
   my $q = $db->prepare($sql);
@@ -2492,27 +2503,28 @@ sub get_lms_nodes {
   exit();
 }
 
-
-
 #**********************************************************
 #
 #**********************************************************
 sub get_odbc {
 
-#, , , , , , connspeed__id
+  #, , , , , , connspeed__id
 
   my %fields = (
     'LOGIN'    => 'user__login',
     'PASSWORD' => 'user__pass',
+
     #  '1.ACTIVATE'     => 'activated',
     #  '1.EXPIRE' 	     => 'expired',
     #  '1.COMPANY_ID'   => '',
     '1.CREDIT_DATE' => 'user__createdt',
-    '1.GID' 	       => 'group__id',
+    '1.GID'         => 'group__id',
+
     #  '1.REDUCTION'    => '',
     #'1.REGISTRATION' => 'DATE_FORMAT(FROM_UNIXTIME(reg_date), \'%Y-%m-%d\')',
-    '4.DISABLE'      => 'user_state__id',
-    '1.DELETED'      => 'user__deletedt',
+    '4.DISABLE' => 'user_state__id',
+    '1.DELETED' => 'user__deletedt',
+
     #  '3.ADDRESS_FLAT'   => '',
     #  '3.ADDRESS_STREET' => 'actual_address',
     #  '3.ADDRESS_BUILD'  => '',
@@ -2554,7 +2566,7 @@ sub get_odbc {
   my $fields_list = join(",\n ", values(%fields));
 
   my $sql = "SELECT $fields_list FROM users";
-  print "$sql\n" if ($debug > 1);
+  print "$sql\n" if ($DEBUG > 1);
 
   my $q = $db->prepare($sql);
   $q->execute();
@@ -2564,18 +2576,18 @@ sub get_odbc {
   my %logins_hash = ();
 
   while (my $row = $q->fetchrow_hashref()) {
-    my $LOGIN = $row->{$fields{LOGIN}};
-    if ($debug > 3) {
+    my $LOGIN = $row->{ $fields{LOGIN} };
+    if ($DEBUG > 3) {
       print "$LOGIN ============= \n";
     }
 
     # Field name
-    while(my ($k, $v) = each %$row ) {
-      if ($debug > 3) {
-        print "$k, $fields_rev{$k} -> ". ((defined($v)) ? $v : '') ."\n";
+    while (my ($k, $v) = each %$row) {
+      if ($DEBUG > 3) {
+        print "$k, $fields_rev{$k} -> " . ((defined($v)) ? $v : '') . "\n";
       }
-      
-      $logins_hash{$LOGIN}{$fields_rev{ $k }} = $v;
+
+      $logins_hash{$LOGIN}{ $fields_rev{$k} } = $v;
     }
 
     if ($logins_hash{$LOGIN}{'1.CREDIT'} && $logins_hash{$LOGIN}{'1.CREDIT'} =~ /(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/) {
@@ -2595,47 +2607,52 @@ sub get_odbc {
 }
 
 #**********************************************************
+
 =head2 get_carbon4() - Import from Carbon 4
 
 =cut
+
 #**********************************************************
 sub get_carbon4 {
   my %fields = (
-    'LOGIN'            => 'LOGIN',
-    'PASSWORD'         => 'PSW',
-    '1.ACTIVATE'       => 'ACTIVATE_DATE',
-    '1.GID'            => 'PARID',
-    '1.DISABLE'        => 'DISABLED',
+    'LOGIN'      => 'LOGIN',
+    'PASSWORD'   => 'PSW',
+    '1.ACTIVATE' => 'ACTIVATE_DATE',
+    '1.GID'      => 'PARID',
+    '1.DISABLE'  => 'DISABLED',
+
     #    '1.REDUCTION' => 'discount',
 
     '3.ADDRESS_FLAT'   => 'A_HOME_NUMBER',
     '3.ADDRESS_STREET' => 'STREET',
     '3.ADDRESS_BUILD'  => 'S_NUMBER',
+
     #    '3.COMMENTS'       => 'comment',
     #    '3.CONTRACT_ID'    => 'num_contract',
-    '3.EMAIL'          => 'EMAIL',
-    '3.FIO'            => 'IDENTIFY',
-    '3.PHONE'          => 'PHONE',
-    '3.PASPORT_DATE'   => 'PASPORT_DATE',
-    '3.PASPORT_GRANT'  => 'PASPORT_GRANT',
-    '3.PASPORT_NUM'    => 'PASPORT_NUM',
-    '3.CITY'           => 'CITY',
+    '3.EMAIL'         => 'EMAIL',
+    '3.FIO'           => 'IDENTIFY',
+    '3.PHONE'         => 'PHONE',
+    '3.PASPORT_DATE'  => 'PASPORT_DATE',
+    '3.PASPORT_GRANT' => 'PASPORT_GRANT',
+    '3.PASPORT_NUM'   => 'PASPORT_NUM',
+    '3.CITY'          => 'CITY',
 
-    '4.CID'            => 'MAC',
-    '4.IP'             => 'IP',
-    '4.SPEED'          => 'LIMIT',
-    '4.TP_ID'          => 'TARIFF_NO',
+    '4.CID'   => 'MAC',
+    '4.IP'    => 'IP',
+    '4.SPEED' => 'LIMIT',
+    '4.TP_ID' => 'TARIFF_NO',
 
-    '5.SUM'            => 'OSTATOK',
+    '5.SUM' => 'OSTATOK',
 
   );
 
-  my %fields_rev = reverse( %fields );
-  my $fields_list = "login, " . join( ", \n", values( %fields ) );
+  my %fields_rev = reverse(%fields);
+  my $fields_list = "login, " . join(", \n", values(%fields));
 
   my %attribute_type_id_for = (
-    PHONE        => 1,
-    PASPORT_NUM  => 13,
+    PHONE       => 1,
+    PASPORT_NUM => 13,
+
     #    PASPORT_SER => 15,
     PASPORT_BY   => 16,
     PASPORT_DATE => 17,
@@ -2667,35 +2684,38 @@ sub get_carbon4 {
           ";
 
   #print $sql;
-  if ( $debug > 4 ) {
+  if ($DEBUG > 4) {
     print $sql;
     return 0;
   }
-  elsif ( $debug > 0 ) {
+  elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my DBI::st $q = $db->prepare( $sql );
+  my DBI::st $q = $db->prepare($sql);
   $q->execute();
 
-  my $users_list = $q->fetchall_hashref( 'ID' );
+  my $users_list = $q->fetchall_hashref('ID');
 
   my %without_logins = ();
-  foreach my $user ( values %{$users_list} ) {
+  foreach my $user (values %{$users_list}) {
+
     # Translating carbon 'ENABLED' to abills 'disabled' attr
     $user->{DISABLED} = !$user->{ENABLED};
 
-    if ( !$user->{LOGIN} ) {
-      $without_logins{$user->{ID}} = $user;
+    if (!$user->{LOGIN}) {
+      $without_logins{ $user->{ID} } = $user;
+
       #      print "!!! User $user->{ID}( $user->{IDENTIFY}  ) don't have login. \n Will not be included in results \n";
-      delete $users_list->{$user->{ID}};
+      delete $users_list->{ $user->{ID} };
     }
   }
 
   # DB charset is CP1251, and we are working in UTF8
   # so need to convert some of columns got from DB
   eval { require Encode; };
-  if ( @! ) {
+  if (@!) {
     print "Please install 'Encode' perl module\n";
+
     #    print "Manual: http://abills.net.ua/wiki/doku.php/abills:docs:manual:soft:perl_odbc \n";
     exit;
   }
@@ -2704,9 +2724,9 @@ sub get_carbon4 {
   my $convert_in_hashref_sub = sub {
 
     my ($list, $columns_to_convert) = @_;
-    foreach my $row ( @{$list} ) {
-      foreach my $column_name ( @{$columns_to_convert} ) {
-        $row->{$column_name} = Encode::encode( 'utf8', Encode::decode( 'cp1251', $row->{$column_name} ) );
+    foreach my $row (@{$list}) {
+      foreach my $column_name (@{$columns_to_convert}) {
+        $row->{$column_name} = Encode::encode('utf8', Encode::decode('cp1251', $row->{$column_name}));
       }
     }
 
@@ -2714,23 +2734,24 @@ sub get_carbon4 {
   };
 
   my @columns_can_contain_cyrillic_values = qw/ IDENTIFY PASPORT_GRANT PSW /;
-  $users_list = &{$convert_in_hashref_sub}( [ values %{$users_list} ], \@columns_can_contain_cyrillic_values );
+  $users_list = &{$convert_in_hashref_sub}([ values %{$users_list} ], \@columns_can_contain_cyrillic_values);
 
-  foreach my $user ( @{$users_list} ) {
-    if ( exists $without_logins{$user->{PARID}} ) {
+  foreach my $user (@{$users_list}) {
+    if (exists $without_logins{ $user->{PARID} }) {
+
       #      print "$user->{IDENTIFY} is probably a group \n";
     }
   }
 
-
   # Show result
   my $divider = "\t";
-  foreach my $user_row ( @{$users_list} ) {
+  foreach my $user_row (@{$users_list}) {
+
     # print login, password
     my $login = $user_row->{LOGIN};
-    my $password = $user_row->{PSW} || $default_password;
+    my $password = $user_row->{PSW} || $DEFAULT_PASSWORD;
 
-    next if ($user_row->{LOGIN} =~ /\d+\-\d+/ );
+    next if ($user_row->{LOGIN} =~ /\d+\-\d+/);
 
     delete $user_row->{LOGIN};
     delete $user_row->{PSW};
@@ -2738,17 +2759,17 @@ sub get_carbon4 {
     my @attributes_row = ();
 
     # Login and password are going as first two columns
-    push ( @attributes_row, ($login, $password) );
+    push(@attributes_row, ($login, $password));
 
     # Saving all other attributes in sorted by attr order
-    foreach my $attribute_name ( sort keys %fields ) {
-      my $attr_value = $user_row->{$fields{$attribute_name}};
-      next if (!defined( $attr_value ) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/);
-      push ( @attributes_row, "$attribute_name=" . '"' . $attr_value . '"' );
+    foreach my $attribute_name (sort keys %fields) {
+      my $attr_value = $user_row->{ $fields{$attribute_name} };
+      next if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/);
+      push(@attributes_row, "$attribute_name=" . '"' . $attr_value . '"');
     }
 
     # Show result
-    print join( $divider, @attributes_row );
+    print join($divider, @attributes_row);
 
     # Next line
     print "\n";
@@ -2758,5 +2779,36 @@ sub get_carbon4 {
 
 }
 
+#**********************************************************
+
+=head2 sync_deposit($update_list) - Syncing deposits from file
+
+  Arguments:
+    $update_list - array of hash_ref
+    {
+      LOGIN   - user id,
+      NEW_SUM - new balance value
+    }
+
+=cut
+
+#**********************************************************
+sub sync_deposit {
+  my ($update_list) = @_;
+
+  foreach my $user_hash (values %{$update_list}) {
+    my $login   = $user_hash->{LOGIN};
+    my $new_sum = $user_hash->{NEW_SUM};
+
+    my $sql = "UPDATE bills SET deposit= ? WHERE uid=(SELECT uid FROM users WHERE id= ? )";
+
+    my $q = $db->prepare($sql);
+
+    $q->execute($new_sum, $login);
+
+    print 'Changed ' . $login . ' deposit to ' . $new_sum . "\n";
+  }
+
+}
 
 1
