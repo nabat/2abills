@@ -50,10 +50,10 @@ if (defined($ARGUMENTS->{'help'}) || $#ARGV < 0) {
 my $IMPORT_FILE      = $ARGUMENTS->{IMPORT_FILE}      || '';
 my $FILE_FIELDS      = $ARGUMENTS->{FILE_FIELDS}      || '';
 my $DEFAULT_PASSWORD = $ARGUMENTS->{DEFAULT_PASSWORD} || 'xxxx';
-my $email_export     = $ARGUMENTS->{EMAIL_CREATE}     || 1;
+my $email_export     = $ARGUMENTS->{EMAIL_CREATE}     || 1; #FIXME : missing functions
 my $EMAIL_DOMAIN_ID  = $ARGUMENTS->{EMAIL_DOMAIN}     || 1;
 my $DEBUG            = $ARGUMENTS->{DEBUG}            || 0;
-my $no_deposit       = $ARGUMENTS->{NO_DEPOSIT}       || 0;
+my $no_deposit       = $ARGUMENTS->{NO_DEPOSIT}       || 0; #FIXME : missing functions
 my $EXCHANGE_RATE    = $ARGUMENTS->{EXCHANGE_RATE}    || 0;
 my $FORMAT = ($ARGUMENTS->{'HTML'}) ? 'html' : '';
 my $SYNC_DEPOSIT = $ARGUMENTS->{SYNC_DEPOSIT} || 0;
