@@ -3,31 +3,34 @@
 
 Migration system:
 
-  freenibs
+  Freenibs
   
-  mabill
+  Mabill
   
-  utm4
-  
-  utm5
-  
-  utm5pg
-  
-  file      - Tab delimiter file
-  
+  UTM 4, 5, 5 (Postgree)
   utm5cards - require IMPORT_FILE paraments with utm cards
   
-  mikbill - get users from mikbill
+  File      - Tab delimiter file
+  
+  Mikbill - get users from mikbill
   
     mikbill_deleted - get deleted users from mikbill
     
     mikbill_blocked - get blocked users from mikbill
     
-  nodeny
+  Nodeny
   
-  traffpro
+  Traffpro
   
-  stargazer
+  Stargazer
   
-  carbon4
+  CarbonSoft 4
+  
+  LANBilling
+  
+  Easyhotspot
+  
+  Unisys
+  
+  BBilling
   
