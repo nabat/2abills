@@ -23,19 +23,24 @@ use warnings;
 
    2abills.pl former abills migration file for Cards module account creation
 
+=head1 VERSION
+
+  VERSION: 0.74
+  UPDATE: 20180331
+
 =cut
 
 use DBI;
 use strict;
 use FindBin '$Bin';
+use Encode;
 
 my $ARGUMENTS = parse_arguments(\@ARGV);
-my $VERSION = 0.73;
+my $VERSION = 0.74;
 
 our (%conf);
 
 #DB information
-
 my $dbhost = $ARGUMENTS->{DB_HOST} || "127.0.0.1";
 my $dbname = $ARGUMENTS->{DB_NAME} || "abills";
 my $dbuser = $ARGUMENTS->{DB_USER} || "root";
@@ -1230,7 +1235,7 @@ sub get_freenibs_users {
 }
 
 #**********************************************************
-=head2 show()
+=head2 show($logins_info)
 
 =cut
 #**********************************************************
@@ -1277,15 +1282,22 @@ sub show {
     next if (!$login_);
     print "$login_\n" if ($DEBUG > 0);
 
+
     if ($FORMAT eq 'html') {
       $output .= "<tr><td>$logins_info->{$login_}{'LOGIN'}</td><td>$logins_info->{$login_}{'PASSWORD'}</td>";
       foreach my $column_title (@titls) {
+
         if (!$column_title) {
           print "//" . $column_title;
           exit;
         }
         next if ($exaption{$column_title});
-        $output .= "<td>" . (($logins_info->{$login_}{$column_title}) ? $logins_info->{$login_}{$column_title} : '') . "</td>";
+        my $value = $logins_info->{$login_}{$column_title} || q{};
+        if ($ARGUMENTS->{win2utf}) {
+          $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
+        }
+
+        $output .= "<td>" . $value . "</td>";
       }
       $output .= "</tr>\n";
     }
@@ -1295,8 +1307,13 @@ sub show {
       foreach my $column_title (@titls) {
         next if ($exaption{$column_title});
 
-        if ($column_title eq '4.TP_ID' && $TP_MIGRATION{ $logins_info->{$login_}{$column_title} }) {
-          $logins_info->{$login_}{$column_title} = $TP_MIGRATION{ $logins_info->{$login_}{$column_title} };
+        my $value = $logins_info->{$login_}{$column_title} || q{};
+        if ($ARGUMENTS->{win2utf}) {
+          $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
+        }
+
+        if ($column_title eq '4.TP_ID' && $TP_MIGRATION{ $value }) {
+          $value = $TP_MIGRATION{ $value };
         }
 
         #Address full
@@ -1308,7 +1325,11 @@ sub show {
               $delimiter2 = '';
             }
 
-            $logins_info->{$login_}{$column_title} =~ m/(.+)$delimiter1(.+)$delimiter2(.{0,10})/;
+            if ($ARGUMENTS->{win2utf}) {
+              $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
+            }
+
+            $value =~ m/(.+)$delimiter1(.+)$delimiter2(.{0,10})/;
 
             my ($ADDRESS_STREET, $ADDRESS_BUILD, $ADDRESS_FLAT) = ($1, $2, $3);
 
@@ -1316,7 +1337,7 @@ sub show {
               $output .= qq{3.ADDRESS_STREET="$ADDRESS_STREET"\t};
             }
             else {
-              $output .= qq{3.ADDRESS_STREET="$logins_info->{$login_}{$column_title}"\t};
+              $output .= qq{3.ADDRESS_STREET="$value"\t};
             }
 
             if ($ADDRESS_BUILD) {
@@ -1333,12 +1354,12 @@ sub show {
 
         #print "$login $column_title\n" if(! $logins_info->{$login}{$column_title});
         if ($logins_info->{$login_}{$column_title}) {
-          $output .= "$column_title=\"" . $logins_info->{$login_}{$column_title} . "\"\t";
+          $output .= "$column_title=\"" . $value . "\"\t";
         }
       }
 
       if ($ARGUMENTS->{SKIP_ERROR_PARAM}) {
-        $output .= "SKIP_ERRORS=1\t4.DV_SKIP_FEE=1\t";
+        $output .= "SKIP_ERRORS=1\t4.INTERNET_SKIP_FEE=1\t";
       }
 
       if ($ARGUMENTS->{ADD_PARAMS}) {
@@ -1527,6 +1548,7 @@ ABillS Migration system Version: $VERSION
     DB_CHARSET          -
     DB_NAME             -
     HTML                - Show export file in HTML FORMAT
+    win2utf             - Convert info from win1251 to utf8
     help                - This help
 [END]
 
