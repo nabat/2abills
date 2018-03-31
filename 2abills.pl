@@ -27,19 +27,20 @@ use warnings;
 
 use DBI;
 use strict;
-use vars qw( %conf );
 use FindBin '$Bin';
 
 my $ARGUMENTS = parse_arguments(\@ARGV);
-my $VERSION   = 0.72;
+my $VERSION = 0.73;
+
+our (%conf);
 
 #DB information
 
-my $dbhost   = $ARGUMENTS->{DB_HOST}     || "127.0.0.1";
-my $dbname   = $ARGUMENTS->{DB_NAME}     || "abills";
-my $dbuser   = $ARGUMENTS->{DB_USER}     || "root";
+my $dbhost = $ARGUMENTS->{DB_HOST} || "127.0.0.1";
+my $dbname = $ARGUMENTS->{DB_NAME} || "abills";
+my $dbuser = $ARGUMENTS->{DB_USER} || "root";
 my $dbpasswd = $ARGUMENTS->{DB_PASSWORD} || "";
-my $dbtype   = $ARGUMENTS->{DB_TYPE}     || "mysql";       #Pg
+my $dbtype = $ARGUMENTS->{DB_TYPE} || "mysql"; #Pg
 my $encryption_key = $ARGUMENTS->{PASSSWD_ENCRYPTION_KEY};
 
 if (defined($ARGUMENTS->{'help'}) || $#ARGV < 0) {
@@ -47,14 +48,14 @@ if (defined($ARGUMENTS->{'help'}) || $#ARGV < 0) {
   exit 0;
 }
 
-my $IMPORT_FILE      = $ARGUMENTS->{IMPORT_FILE}      || '';
-my $FILE_FIELDS      = $ARGUMENTS->{FILE_FIELDS}      || '';
+my $IMPORT_FILE = $ARGUMENTS->{IMPORT_FILE} || '';
+my $FILE_FIELDS = $ARGUMENTS->{FILE_FIELDS} || '';
 my $DEFAULT_PASSWORD = $ARGUMENTS->{DEFAULT_PASSWORD} || 'xxxx';
-my $email_export     = $ARGUMENTS->{EMAIL_CREATE}     || 1; #FIXME : missing functions
-my $EMAIL_DOMAIN_ID  = $ARGUMENTS->{EMAIL_DOMAIN}     || 1;
-my $DEBUG            = $ARGUMENTS->{DEBUG}            || 0;
-my $no_deposit       = $ARGUMENTS->{NO_DEPOSIT}       || 0; #FIXME : missing functions
-my $EXCHANGE_RATE    = $ARGUMENTS->{EXCHANGE_RATE}    || 0;
+#my $email_export     = $ARGUMENTS->{EMAIL_CREATE}     || 1; #FIXME : missing functions
+my $EMAIL_DOMAIN_ID = $ARGUMENTS->{EMAIL_DOMAIN} || 1;
+my $DEBUG = $ARGUMENTS->{DEBUG} || 0;
+#my $no_deposit       = $ARGUMENTS->{NO_DEPOSIT}       || 0; #FIXME : missing functions
+my $EXCHANGE_RATE = $ARGUMENTS->{EXCHANGE_RATE} || 0;
 my $FORMAT = ($ARGUMENTS->{'HTML'}) ? 'html' : '';
 my $SYNC_DEPOSIT = $ARGUMENTS->{SYNC_DEPOSIT} || 0;
 
@@ -82,8 +83,8 @@ if ($ARGUMENTS->{FROM}) {
     $dbtype = 'ODBC';
     my $db_dsn = 'MSSQL';
 
-    eval { require DBD::ODBC; };
-    if (@!) {
+    eval {require DBD::ODBC;};
+    if ($@) {
       print "Please install 'DBD::ODBC'\n";
       print "Manual: http://abills.net.ua/wiki/doku.php/abills:docs:manual:soft:perl_odbc \n";
       exit;
@@ -95,13 +96,13 @@ if ($ARGUMENTS->{FROM}) {
     }
     else {
       $db = DBI->connect("dbi:ODBC:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
-      or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
+        or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
     }
 
   }
   else {
     $db = DBI->connect("dbi:$dbtype:dbname=$dbname;host=$dbhost", "$dbuser", "$dbpasswd")
-    || die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
+      || die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
   }
 }
 
@@ -209,26 +210,29 @@ if ($db) {
 }
 
 #**************************************************
-# ADD_NAS=file FIELDS=NAS_NAME,MAC
-#
-#Felds:
-# NAS_NAME
-# IP
-# MAC
-# NAS_IDENTIFIER
-# NAS_DESCRIBE
-# NAS_AUTH_TYPE
-# NAS_MNG_IP_PORT
-# NAS_MNG_USER
-# NAS_MNG_PASSWORD
-# NAS_RAD_PAIRS
-# NAS_ALIVE
-# NAS_DISABLE
-# NAS_EXT_ACCT
-#
+=head2
+
+ ADD_NAS=file FIELDS=NAS_NAME,MAC
+
+  Felds:
+    NAS_NAME
+    IP
+   MAC
+   NAS_IDENTIFIER
+   NAS_DESCRIBE
+   NAS_AUTH_TYPE
+   NAS_MNG_IP_PORT
+   NAS_MNG_USER
+   NAS_MNG_PASSWORD
+   NAS_RAD_PAIRS
+   NAS_ALIVE
+   NAS_DISABLE
+   NAS_EXT_ACCT
+
+=cut
 #**************************************************
 sub add_nas {
-  my ($attr) = @_;
+  #my ($attr) = @_;
 
   if (!$FILE_FIELDS) {
     print "Specify fields FILE_FIELDS=... \n";
@@ -238,7 +242,7 @@ sub add_nas {
   $FILE_FIELDS =~ s/\s//g;
   my @fiealds_arr = split(/,/, $FILE_FIELDS);
 
-  my $arr          = file_content($ARGUMENTS->{ADD_NAS});
+  my $arr = file_content($ARGUMENTS->{ADD_NAS});
   my @add_arr_hash = ();
 
   foreach my $line (@$arr) {
@@ -246,7 +250,7 @@ sub add_nas {
     my @val_arr = split(/\t/, $line);
 
     my %val_hash = ();
-    for (my $i = 0 ; $i <= $#val_arr ; $i++) {
+    for (my $i = 0; $i <= $#val_arr; $i++) {
       $val_hash{ $fiealds_arr[$i] } = $val_arr[$i];
     }
 
@@ -283,7 +287,7 @@ sub add_nas {
 
   my $admin = Admins->new($abills_db, \%conf);
   $admin->info($conf{SYSTEM_ADMIN_ID}, { IP => '127.0.0.1' });
-  my $Dhcphosts = Dhcphosts->new($abills_db, $admin, \%conf);
+  #my $Dhcphosts = Dhcphosts->new($abills_db, $admin, \%conf);
   $admin->{MODULE} = '';
   my $Nas = Nas->new($abills_db, \%conf);
 
@@ -294,10 +298,10 @@ sub add_nas {
     $Nas->{debug} = 1;
   }
 
-  for (my $i = 0 ; $i <= $#add_arr_hash ; $i++) {
+  for (my $i = 0; $i <= $#add_arr_hash; $i++) {
     if ($DEBUG > 2) {
       print "$i - ";
-      for (my $if = 0 ; $if <= $#fiealds_arr ; $if++) {
+      for (my $if = 0; $if <= $#fiealds_arr; $if++) {
         print "$fiealds_arr[$if]:$add_arr_hash[$i]->{$fiealds_arr[$if]}  ";
       }
       print "\n";
@@ -329,7 +333,9 @@ sub add_nas {
 }
 
 #**********************************************************
-#
+=head2 mac_former($mac);
+
+=cut
 #**********************************************************
 sub mac_former {
   my ($mac) = @_;
@@ -354,14 +360,16 @@ sub mac_former {
 }
 
 #**************************************************
-#
+=head2 file_content($filename)
+
+=cut
 #**************************************************
 sub file_content {
   my ($filename) = @_;
 
   my $content = '';
 
-  open(my $fh, "$filename") || die "Can't open file '$filename' $! \n";
+  open(my $fh, '<', $filename) || die "Can't open file '$filename' $! \n";
   while (<$fh>) {
     $content .= $_;
   }
@@ -382,8 +390,8 @@ sub file_content {
 sub get_connection_to_firebird_host {
   my ($server, $db_name, $password) = @_;
 
-  my $driver = "libOdbcFb.so";    # имя ODBC драйвера, скачан с официального сайта Firebird
-  my $user   = "sysdba";          # логин
+  my $driver = "libOdbcFb.so"; # имя ODBC драйвера, скачан с официального сайта Firebird
+  my $user = "sysdba";         # логин
 
   my %DSN = (
     ODBC => {
@@ -404,10 +412,12 @@ sub get_connection_to_firebird_host {
 }
 
 #**************************************************
-#
+=head2 get_abills()
+
+=cut
 #**************************************************
 sub get_abills {
-  my ($attr) = @_;
+  #my ($attr) = @_;
 
   my %fields = (
 
@@ -470,19 +480,19 @@ sub get_abills {
     '3.PASSPORT_DATE'  => 'pasport_date',
     '3.PASSPORT_GRANT' => 'pasport_grant',
 
-    '4.CID'       => 'CID',
-    '4.FILTER_ID' => 'filter_id',
-    '4.IP'        => 'ip',
+    '4.CID'            => 'CID',
+    '4.FILTER_ID'      => 'filter_id',
+    '4.IP'             => 'ip',
 
     #  '4.NETMASK'        => '\'255.255.255.255\'',
     #  '4.SIMULTANEONSLY' => 'simultaneous_use',
     #  '4.SPEED'          => 'speed',
-    '4.TP_ID' => 'tp_id',
+    '4.TP_ID'          => 'tp_id',
 
     #  '4.CALLBACK'       => 'allow_callback',
 
-    '5.SUM'      => 'deposit',
-    '5.DESCRIBE' => "'Migration'",
+    '5.SUM'            => 'deposit',
+    '5.DESCRIBE'       => "'Migration'",
 
     #  '5.ER'             => undef,
     #  '5.EXT_ID'         => undef,
@@ -500,7 +510,7 @@ sub get_abills {
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "user, " . join(", \n", values(%fields));
+  #my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT u.id, DECODE(u.password, 'test12345678901234567890') AS password,
   pi.fio as fio,
@@ -544,16 +554,16 @@ sub get_abills {
 
   # return 0;
 
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
-  my $output       = '';
-  my %logins_hash  = ();
+  #my $output       = '';
+  my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
     $logins_hash{$LOGIN}{LOGIN} = $row[0];
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
       }
@@ -573,10 +583,12 @@ sub get_abills {
 }
 
 #**************************************************
-#
+=head2 utm5cards()
+
+=cut
 #**************************************************
 sub utm5cards {
-  my ($attr) = @_;
+  #my ($attr) = @_;
 
 =comments
 <?xml version="1.0" encoding="Windows-1251"?>
@@ -597,7 +609,7 @@ sub utm5cards {
 
   my $arr = file_content($IMPORT_FILE);
 
-  require "/usr/abills/libexec/config.pl";
+  do "/usr/abills/libexec/config.pl";
 
   shift(@$arr);
   my @sql_arr = ();
@@ -606,11 +618,11 @@ sub utm5cards {
     #print "$line\n";
     my @csv = split(/,/, $line);
 
-    my $cards_id    = $csv[0];
-    my $secret      = $csv[2];
-    my $balance     = $csv[3];
+    my $cards_id = $csv[0];
+    my $secret = $csv[2];
+    my $balance = $csv[3];
     my $expire_date = '';
-    my $status      = 0;
+    my $status = 0;
     if ($csv[5] =~ '(\d{2})\.(\d{2})\.(\d{4})') {
       $expire_date = "$3-$2-$1";
     }
@@ -633,15 +645,19 @@ sub utm5cards {
   }
 
   foreach my $line (@sql_arr) {
-    print $line. "\n" if ($DEBUG > 1);
+    print $line . "\n" if ($DEBUG > 1);
     if ($DEBUG < 5) {
       $db->do("$line");
     }
   }
+
+  return 1;
 }
 
 #**************************************************
-# Import from_TAB delimiter file
+=head2 get_file() Import from_TAB delimiter file
+
+=cut
 #**************************************************
 sub get_file {
   my @FILE_FIELDS = ('3.CONTRACT_ID', '3.FIO', 'LOGIN', 'PASSWORD', '3.ADDRESS_STREET', '4.IP', '3.COMMENTS', '5.SUM', '4.TP_ID', '3.PHONE',);
@@ -653,19 +669,19 @@ sub get_file {
 
   my %logins_hash = ();
   my %TARIFS_HASH = ();
-  my $TP_ID       = 0;
+  my $TP_ID = 0;
 
   my $rows = file_content($IMPORT_FILE);
 
   foreach my $line (@$rows) {
-    my @cels      = split(/\t/, $line);
-    my %tmp_hash  = ();
-    my $COMMENTS  = '';
+    my @cels = split(/\t/, $line);
+    my %tmp_hash = ();
+    my $COMMENTS = '';
     my $cel_phone = '';
 
     print $line if ($DEBUG > 4);
 
-    for (my $i = 0 ; $i <= $#cels ; $i++) {
+    for (my $i = 0; $i <= $#cels; $i++) {
       next if (!$FILE_FIELDS[$i]);
 
       $tmp_hash{ $FILE_FIELDS[$i] } = $cels[$i];
@@ -742,18 +758,18 @@ sub get_file {
 #**********************************************************
 sub get_utm4_users {
   my %fields = (
-    'LOGIN'    => 'login',
-    'PASSWORD' => 'password',
+    'LOGIN'            => 'login',
+    'PASSWORD'         => 'password',
 
     #  '1.ACTIVATE'     => 'activated',
     #  '1.EXPIRE' 	     => 'expired',
     #  '1.COMPANY_ID'   => '',
-    '1.CREDIT' => 'credit',
+    '1.CREDIT'         => 'credit',
 
     #  '1.GID' 	       => '',
     #  '1.REDUCTION'    => '',
-    '1.REGISTRATION' => 'DATE_FORMAT(FROM_UNIXTIME(reg_date), \'%Y-%m-%d\')',
-    '1.DISABLE'      => 'block',
+    '1.REGISTRATION'   => 'DATE_FORMAT(FROM_UNIXTIME(reg_date), \'%Y-%m-%d\')',
+    '1.DISABLE'        => 'block',
 
     #  '3.ADDRESS_FLAT'   => '',
     '3.ADDRESS_STREET' => 'actual_address',
@@ -761,23 +777,23 @@ sub get_utm4_users {
     #  '3.ADDRESS_BUILD'  => '',
     #  '3.COMMENTS'       => '',
     #  '3.CONTRACT_ID' 	 => '',
-    '3.EMAIL' => 'email',
-    '3.FIO'   => 'full_name',
+    '3.EMAIL'          => 'email',
+    '3.FIO'            => 'full_name',
 
     #  '3.PHONE'          => 'phone',
 
     #  '4.CID'            => '',
     #  '4.FILTER_ID'      => '',
-    '4.IP' => 'ip',
+    '4.IP'             => 'ip',
 
     #  '4.NETMASK'        => '\'255.255.255.255\'',
     #  '4.SIMULTANEONSLY' => 'simultaneous_use',
     #  '4.SPEED'          => 'speed',
-    '4.TP_ID' => 'tariff',
+    '4.TP_ID'          => 'tariff',
 
     #  '4.CALLBACK'       => 'allow_callback',
 
-    '5.SUM' => 'bill',
+    '5.SUM'            => 'bill',
 
     #  '5.DESCRIBE' 	     => "'Migration'",
     #  '5.ER'             => undef,
@@ -803,17 +819,17 @@ sub get_utm4_users {
   my $sql = "SELECT $fields_list FROM users";
   print "$sql\n" if ($DEBUG > 0);
 
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output      = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
       }
@@ -838,37 +854,39 @@ sub get_utm4_users {
 }
 
 #**********************************************************
-# Export from UTM5
+=head2 get_utm5_users() Export from UTM5
+
+=cut
 #**********************************************************
 sub get_utm5_users {
 
   my %fields = (
-    'LOGIN'      => 'login',
-    'PASSWORD'   => 'password',
-    '1.ACTIVATE' => 'if(dp.start_date, DATE_FORMAT(FROM_UNIXTIME(dp.start_date), \'%Y-%m-%d\'), \'0000-00-00\')',
-    '1.EXPIRE'   => 'if(dp.end_date, DATE_FORMAT(FROM_UNIXTIME(dp.end_date), \'%Y-%m-%d\'), \'0000-00-00\')',
+    'LOGIN'             => 'login',
+    'PASSWORD'          => 'password',
+    '1.ACTIVATE'        => 'if(dp.start_date, DATE_FORMAT(FROM_UNIXTIME(dp.start_date), \'%Y-%m-%d\'), \'0000-00-00\')',
+    '1.EXPIRE'          => 'if(dp.end_date, DATE_FORMAT(FROM_UNIXTIME(dp.end_date), \'%Y-%m-%d\'), \'0000-00-00\')',
 
     #  '1.COMPANY_ID'    => '',
-    '1.CREDIT' => 'credit',
-    '1.GID'    => 'if(gl.group_id, gl.group_id, 0)',
+    '1.CREDIT'          => 'credit',
+    '1.GID'             => 'if(gl.group_id, gl.group_id, 0)',
 
     #  '1.REDUCTION'     => '',
-    '1.REGISTRATION' => 'FROM_UNIXTIME(u.create_date)',
-    '1.DISABLE'      => 'if(a.is_blocked, 1, 0)',
+    '1.REGISTRATION'    => 'FROM_UNIXTIME(u.create_date)',
+    '1.DISABLE'         => 'if(a.is_blocked, 1, 0)',
 
-    '3.ADDRESS_FLAT'   => 'flat_number',
-    '3.ADDRESS_STREET' => 'if(t12.street!=\'\', t12.street, \'\')',
-    '3.ADDRESS_BUILD'  => 'if(t12.number!=\'\', t12.number, \'\')',
-    '3.COMMENTS'       => 'comments',
+    '3.ADDRESS_FLAT'    => 'flat_number',
+    '3.ADDRESS_STREET'  => 'if(t12.street!=\'\', t12.street, \'\')',
+    '3.ADDRESS_BUILD'   => 'if(t12.number!=\'\', t12.number, \'\')',
+    '3.COMMENTS'        => 'comments',
 
     #  '3.CONTRACT_ID'       => '',
-    '3.EMAIL'         => 'if(u.email!=\'\', u.email, \'\')',
-    '3.FIO'           => 'full_name',
-    '3.PASPORT_GRANT' => 'passport',
-    '3.PHONE'         => 'home_telephone',
-    '3.COUNTRY_ID'    => '804',
-    '3.ZIP'           => 'if(t12.post_code!=\'\', t12.post_code, \'\')',
-    '3.CITY '         => 'if(t12.city!=\'\', t12.city, \'\')',
+    '3.EMAIL'           => 'if(u.email!=\'\', u.email, \'\')',
+    '3.FIO'             => 'full_name',
+    '3.PASPORT_GRANT'   => 'passport',
+    '3.PHONE'           => 'home_telephone',
+    '3.COUNTRY_ID'      => '804',
+    '3.ZIP'             => 'if(t12.post_code!=\'\', t12.post_code, \'\')',
+    '3.CITY '           => 'if(t12.city!=\'\', t12.city, \'\')',
 
     '3._entrance'       => 'if(t12.building!=\'\', t12.building, \'\')',
     '3._work_telephone' => 'if(u.work_telephone!=\'\', u.work_telephone, \'\')',
@@ -879,19 +897,19 @@ sub get_utm5_users {
     '3._tariff_name'    => 'if(t9.name!=\'\', t9.name, \'\')',
     '3._group_name'     => 'if(t11.group_name!=\'\', t11.group_name, \'\')',
 
-    '4.CID' => 'if(t1.mac!=\'\', t1.mac, \'\')',
+    '4.CID'             => 'if(t1.mac!=\'\', t1.mac, \'\')',
 
     #  '4.FILTER_ID'      => '',
-    '4.IP' => 'if(inet_ntoa(t1.ip&0xffffffff), inet_ntoa(t1.ip&0xffffffff), \'\')',
+    '4.IP'              => 'if(inet_ntoa(t1.ip&0xffffffff), inet_ntoa(t1.ip&0xffffffff), \'\')',
 
     #  '4.NETMASK'        => '\'255.255.255.255\'',
     #  '4.SIMULTANEONSLY' => 'simultaneous_use',
     #  '4.SPEED'          => 'speed',
-    '4.TP_ID' => 'if(atl.tariff_id, atl.tariff_id, 0)',
+    '4.TP_ID'           => 'if(atl.tariff_id, atl.tariff_id, 0)',
 
     #  '4.CALLBACK'       => 'allow_callback',
 
-    '5.SUM' => 'balance',
+    '5.SUM'             => 'balance',
 
     #  '5.DESCRIBE'       => "'Migration'",
     #  '5.ER'             => undef,
@@ -941,17 +959,18 @@ sub get_utm5_users {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output      = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i <= $#row ; $i++) {
+    for (my $i = 1; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -978,23 +997,25 @@ sub get_utm5_users {
 }
 
 #**********************************************************
-# Export from UTM5
+=head2 get_utm5pg_users() Export from UTM5
+
+=cut
 #**********************************************************
 sub get_utm5pg_users {
 
   my %fields = (
-    'LOGIN'      => 'login',
-    'PASSWORD'   => 'password',
-    '1.ACTIVATE' => 'if(dp.start_date, DATE_FORMAT(FROM_UNIXTIME(dp.start_date), \'%Y-%m-%d\'), \'0000-00-00\')',
-    '1.EXPIRE'   => 'if(dp.end_date, DATE_FORMAT(FROM_UNIXTIME(dp.end_date), \'%Y-%m-%d\'), \'0000-00-00\')',
+    'LOGIN'            => 'login',
+    'PASSWORD'         => 'password',
+    '1.ACTIVATE'       => 'if(dp.start_date, DATE_FORMAT(FROM_UNIXTIME(dp.start_date), \'%Y-%m-%d\'), \'0000-00-00\')',
+    '1.EXPIRE'         => 'if(dp.end_date, DATE_FORMAT(FROM_UNIXTIME(dp.end_date), \'%Y-%m-%d\'), \'0000-00-00\')',
 
     #  '1.COMPANY_ID'   => '',
-    '1.CREDIT' => 'credit',
-    '1.GID'    => 'gid',
+    '1.CREDIT'         => 'credit',
+    '1.GID'            => 'gid',
 
     #  '1.REDUCTION'    => '',
-    '1.REGISTRATION' => 'FROM_UNIXTIME(u.create_date)',
-    '1.DISABLE'      => 'disable',
+    '1.REGISTRATION'   => 'FROM_UNIXTIME(u.create_date)',
+    '1.DISABLE'        => 'disable',
 
     '3.ADDRESS_FLAT'   => 'flat_number',
     '3.ADDRESS_STREET' => 'actual_address',
@@ -1002,10 +1023,10 @@ sub get_utm5pg_users {
     '3.COMMENTS'       => 'comments',
 
     #  '3.CONTRACT_ID'       => '',
-    '3.EMAIL'         => 'if(u.email, u.email, \'\')',
-    '3.FIO'           => 'full_name',
-    '5.PASPORT_GRANT' => 'passport',
-    '3.PHONE'         => 'home_telephone',
+    '3.EMAIL'          => 'if(u.email, u.email, \'\')',
+    '3.FIO'            => 'full_name',
+    '5.PASPORT_GRANT'  => 'passport',
+    '3.PHONE'          => 'home_telephone',
 
     #  '4.CID'            => '',
     #  '4.FILTER_ID'      => '',
@@ -1013,11 +1034,11 @@ sub get_utm5pg_users {
     #  '4.NETMASK'        => '\'255.255.255.255\'',
     #  '4.SIMULTANEONSLY' => 'simultaneous_use',
     #  '4.SPEED'          => 'speed',
-    '4.TP_ID' => 'tp',    #'COALESCE(atl.tariff_id, 0)',
+    '4.TP_ID'          => 'tp', #'COALESCE(atl.tariff_id, 0)',
 
     #  '4.CALLBACK'       => 'allow_callback',
 
-    '5.SUM' => 'balance',
+    '5.SUM'            => 'balance',
 
     #  '5.DESCRIBE'       => "'Migration'",
     #  '5.ER'             => undef,
@@ -1072,17 +1093,17 @@ ORDER BY u.login";
     print "$sql\n";
   }
 
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output      = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -1112,19 +1133,19 @@ sub get_freenibs_users {
   my ($attr) = @_;
 
   my %fields = (
-    'LOGIN'    => 'user',
-    'PASSWORD' => 'password',
+    'LOGIN'            => 'user',
+    'PASSWORD'         => 'password',
 
     #  '1.ACTIVATE'     => 'activated',
-    '1.EXPIRE' => 'expired',
+    '1.EXPIRE'         => 'expired',
 
     #  '1.COMPANY_ID'   => '',
-    '1.CREDIT' => 'credit',
+    '1.CREDIT'         => 'credit',
 
     #  '1.GID' 	       => '',
     #  '1.REDUCTION'    => '',
-    '1.REGISTRATION' => 'add_date',
-    '1.DISABLE'      => 'blocked',
+    '1.REGISTRATION'   => 'add_date',
+    '1.DISABLE'        => 'blocked',
 
     #  '3.ADDRESS_FLAT'   => '',
     '3.ADDRESS_STREET' => 'address',
@@ -1133,19 +1154,19 @@ sub get_freenibs_users {
     #  '3.COMMENTS'       => '',
     #  '3.CONTRACT_ID' 	 => '',
     #  '3.EMAIL'          => '',
-    '3.FIO'   => 'fio',
-    '3.PHONE' => 'phone',
+    '3.FIO'            => 'fio',
+    '3.PHONE'          => 'phone',
 
     #  '4.CID'            => '',
     #  '4.FILTER_ID'      => '',
-    '4.IP' => 'framed_ip',
+    '4.IP'             => 'framed_ip',
 
     #  '4.NETMASK'        => '\'255.255.255.255\'',
     '4.SIMULTANEONSLY' => 'simultaneous_use',
     '4.TP_ID'          => 'gid',
     '4.CALLBACK'       => 'allow_callback',
 
-    '5.SUM' => 'deposit',
+    '5.SUM'            => 'deposit',
 
     #  '5.DESCRIBE' 	     => "'Migration'",
     #  '5.ER'             => undef,
@@ -1154,9 +1175,9 @@ sub get_freenibs_users {
   );
 
   if ($attr->{MABILL}) {
-    $fields{'4.SPEED'}    = 'speed';
-    $fields{'6.USERNAME'} = 'email', $fields{'6.DOMAINS_SEL'} = $EMAIL_DOMAIN_ID || 0;
-    $fields{'PASSWORD'}   = 'if(crypt_method=1, email_pass, password)';
+    $fields{'4.SPEED'} = 'speed';
+      $fields{'6.USERNAME'} = 'email', $fields{'6.DOMAINS_SEL'} = $EMAIL_DOMAIN_ID || 0;
+    $fields{'PASSWORD'} = 'if(crypt_method=1, email_pass, password)';
 
     #  '6.COMMENTS'        => '',
     #  '6.MAILS_LIMIT'	    => 0,
@@ -1174,17 +1195,17 @@ sub get_freenibs_users {
   my $sql = "SELECT $fields_list FROM users";
   print "$sql\n" if ($DEBUG > 0);
 
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
       }
@@ -1204,14 +1225,17 @@ sub get_freenibs_users {
   }
 
   undef($q);
+
   return \%logins_hash;
 }
 
 #**********************************************************
-#
+=head2 show()
+
+=cut
 #**********************************************************
 sub show {
-  my ($logins_info, $attr) = @_;
+  my ($logins_info) = @_;
 
   my $counts = 0;
   my $output = '';
@@ -1226,7 +1250,7 @@ sub show {
   my @titls = sort keys %$logins_info;
   my $login = $titls[0];
 
-  @titls = sort keys %{ $logins_info->{$login} };
+  @titls = sort keys %{$logins_info->{$login}};
 
   if ($ARGUMENTS->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
     push @titls, '1.UID';
@@ -1243,36 +1267,36 @@ sub show {
     $output .= "</tr>\n";
   }
 
-  foreach $login (sort keys %$logins_info) {
+  foreach my $login_ (sort keys %$logins_info) {
 
     #add login to uid
-    if ($ARGUMENTS->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
-      $logins_info->{$login}{'1.UID'} = $login;
+    if ($ARGUMENTS->{LOGIN2UID} && !$logins_info->{$login_}{'1.UID'}) {
+      $logins_info->{$login_}{'1.UID'} = $login_;
     }
 
-    next if (!$login);
-    print "$login\n" if ($DEBUG > 0);
+    next if (!$login_);
+    print "$login_\n" if ($DEBUG > 0);
 
     if ($FORMAT eq 'html') {
-      $output .= "<tr><td>$logins_info->{$login}{'LOGIN'}</td><td>$logins_info->{$login}{'PASSWORD'}</td>";
+      $output .= "<tr><td>$logins_info->{$login_}{'LOGIN'}</td><td>$logins_info->{$login_}{'PASSWORD'}</td>";
       foreach my $column_title (@titls) {
         if (!$column_title) {
           print "//" . $column_title;
           exit;
         }
         next if ($exaption{$column_title});
-        $output .= "<td>" . (($logins_info->{$login}{$column_title}) ? $logins_info->{$login}{$column_title} : '') . "</td>";
+        $output .= "<td>" . (($logins_info->{$login_}{$column_title}) ? $logins_info->{$login_}{$column_title} : '') . "</td>";
       }
       $output .= "</tr>\n";
     }
     else {
-      $output .= "$logins_info->{$login}{'LOGIN'}\t" . (($logins_info->{$login}{'PASSWORD'}) ? $logins_info->{$login}{'PASSWORD'} : '') . "\t";
+      $output .= "$logins_info->{$login_}{'LOGIN'}\t" . (($logins_info->{$login_}{'PASSWORD'}) ? $logins_info->{$login_}{'PASSWORD'} : '') . "\t";
 
       foreach my $column_title (@titls) {
         next if ($exaption{$column_title});
 
-        if ($column_title eq '4.TP_ID' && $TP_MIGRATION{ $logins_info->{$login}{$column_title} }) {
-          $logins_info->{$login}{$column_title} = $TP_MIGRATION{ $logins_info->{$login}{$column_title} };
+        if ($column_title eq '4.TP_ID' && $TP_MIGRATION{ $logins_info->{$login_}{$column_title} }) {
+          $logins_info->{$login_}{$column_title} = $TP_MIGRATION{ $logins_info->{$login_}{$column_title} };
         }
 
         #Address full
@@ -1284,7 +1308,7 @@ sub show {
               $delimiter2 = '';
             }
 
-            $logins_info->{$login}{$column_title} =~ m/(.+)$delimiter1(.+)$delimiter2(.{0,10})/;
+            $logins_info->{$login_}{$column_title} =~ m/(.+)$delimiter1(.+)$delimiter2(.{0,10})/;
 
             my ($ADDRESS_STREET, $ADDRESS_BUILD, $ADDRESS_FLAT) = ($1, $2, $3);
 
@@ -1292,7 +1316,7 @@ sub show {
               $output .= qq{3.ADDRESS_STREET="$ADDRESS_STREET"\t};
             }
             else {
-              $output .= qq{3.ADDRESS_STREET="$logins_info->{$login}{$column_title}"\t};
+              $output .= qq{3.ADDRESS_STREET="$logins_info->{$login_}{$column_title}"\t};
             }
 
             if ($ADDRESS_BUILD) {
@@ -1308,8 +1332,8 @@ sub show {
         }
 
         #print "$login $column_title\n" if(! $logins_info->{$login}{$column_title});
-        if ($logins_info->{$login}{$column_title}) {
-          $output .= "$column_title=\"" . $logins_info->{$login}{$column_title} . "\"\t";
+        if ($logins_info->{$login_}{$column_title}) {
+          $output .= "$column_title=\"" . $logins_info->{$login_}{$column_title} . "\"\t";
         }
       }
 
@@ -1334,25 +1358,28 @@ sub show {
 
   print "$output\n";
   print "ROWS: $counts\n";
+
+  return 1;
 }
 
 #*******************************************************************
-# Parse comand line arguments
-# get_unisys(@$argv)
+=head2 get_unisys() -  Parse comand line arguments
+
+=cut
 #*******************************************************************
 sub get_unisys {
 
   my %fields = (
-    'LOGIN'      => 'name',
-    'PASSWORD'   => '\'-\'',
-    '1.ACTIVATE' => 'DATE_FORMAT(allowsince, \'Y-%m-%d\')',
-    '1.EXPIRE'   => 'DATE_FORMAT(allowsince, \'Y-%m-%d\')',
+    'LOGIN'            => 'name',
+    'PASSWORD'         => '\'-\'',
+    '1.ACTIVATE'       => 'DATE_FORMAT(allowsince, \'Y-%m-%d\')',
+    '1.EXPIRE'         => 'DATE_FORMAT(allowsince, \'Y-%m-%d\')',
 
     #  '1.COMPANY_ID'   => '',
     #  '1.CREDIT'         => '',
     #  '1.GID'              => 'if(gl.group_id, gl.group_id, 0)',
     #  '1.REDUCTION'    => '',
-    '1.REGISTRATION' => 'since',
+    '1.REGISTRATION'   => 'since',
 
     #  '1.DISABLE'      => 'if(u.is_blocked, u.is_blocked, 0)',
 
@@ -1360,14 +1387,14 @@ sub get_unisys {
     '3.ADDRESS_STREET' => 'address',
 
     #  '3.ADDRESS_BUILD'  => 'house_id',
-    '3.COMMENTS' => 'rem',
+    '3.COMMENTS'       => 'rem',
 
     #  '3.CONTRACT_ID'       => '',
-    '3.EMAIL' => 'email',
-    '3.FIO'   => 'fullname',
+    '3.EMAIL'          => 'email',
+    '3.FIO'            => 'fullname',
 
     #  '5.PASPORT_GRANT'  => 'passport',
-    '3.PHONE' => 'phone',
+    '3.PHONE'          => 'phone',
 
     #  '4.CID'            => '',
     #  '4.FILTER_ID'      => '',
@@ -1378,7 +1405,7 @@ sub get_unisys {
     #  '4.TP_ID'          => 'if(atl.tariff_id, atl.tariff_id, 0)',
     #  '4.CALLBACK'       => 'allow_callback',
 
-    '5.SUM' => 'balance',
+    '5.SUM'            => 'balance',
 
     #  '5.DESCRIBE'       => "'Migration'",
     #  '5.ER'             => undef,
@@ -1411,17 +1438,18 @@ sub get_unisys {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output      = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -1451,7 +1479,7 @@ sub get_unisys {
 #*******************************************************************
 sub help {
 
-  print << "[END]";
+  print <<"[END]";
 ABillS Migration system Version: $VERSION
 (http://abills.net.ua)
 
@@ -1594,7 +1622,7 @@ sub get_mikbill {
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "user, " . join(", \n", values(%fields));
+  #my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT
 user,
@@ -1629,17 +1657,17 @@ deposit
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i <= $#row ; $i++) {
+    for (my $i = 1; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -1662,11 +1690,14 @@ deposit
   }
 
   undef($q);
+
   return \%logins_hash;
 }
 
 #**********************************************************
-#
+=head2 get_mikbill_deleted()
+
+=cut
 #**********************************************************
 sub get_mikbill_deleted {
 
@@ -1694,7 +1725,7 @@ sub get_mikbill_deleted {
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "user, " . join(", \n", values(%fields));
+  #my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT
 user,
@@ -1729,17 +1760,17 @@ deposit
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i <= $#row ; $i++) {
+    for (my $i = 1; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -1766,7 +1797,9 @@ deposit
 }
 
 #**********************************************************
-# GET bloked users from db mikbill
+=head2 get_mikbill_blocked() - GET bloked users from db mikbill
+
+=cut
 #**********************************************************
 sub get_mikbill_blocked {
 
@@ -1794,7 +1827,7 @@ sub get_mikbill_blocked {
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "user, " . join(", \n", values(%fields));
+  #my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT
 user,
@@ -1829,17 +1862,18 @@ deposit
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i <= $#row ; $i++) {
+    for (my $i = 1; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -1866,25 +1900,28 @@ deposit
 }
 
 #**********************************************************
-# Export from Nodeny
-# 49.xx
-# 50.32
+=head2 get_nodeny() Export from Nodeny
+
+  49.xx
+  50.32
+
+=cut
 #**********************************************************
 sub get_nodeny {
 
   $encryption_key = "hardpass3" if (!$encryption_key);
 
   my %fields = (
-    '1.UID',     => 'id',
-    'LOGIN'      => 'name',
-    'PASSWORD'   => "AES_DECRYPT(passwd, \'$encryption_key\')",
-    '1.ACTIVATE' => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\')',
+    '1.UID',        => 'id',
+    'LOGIN'         => 'name',
+    'PASSWORD'      => "AES_DECRYPT(passwd, \'$encryption_key\')",
+    '1.ACTIVATE'    => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\')',
 
     #  '1.EXPIRE'			=> 'expired',
     #  '1.COMPANY_ID'		=> '',
     #  '1.CREDIT'			=> 'credit',
-    '1.GID'       => 'grp',
-    '1.REDUCTION' => 'discount',
+    '1.GID'         => 'grp',
+    '1.REDUCTION'   => 'discount',
 
     #  '1.REGISTRATION'		=> 'add_date',
     #  '1.DISABLE'			=> 'blocked',
@@ -1896,23 +1933,23 @@ sub get_nodeny {
     '3.CONTRACT_ID' => 'contract',
 
     #  '3.EMAIL'				=> 'email',
-    '3.FIO' => 'fio',
+    '3.FIO'         => 'fio',
 
     #  '5.PASPORT_GRANT'		=> 'passportserie',
     #  '3.PHONE'				=> 'mob_tel',
 
     #  '4.CID'				=> '',
     #  '4.FILTER_ID'		=> '',
-    '4.IP' => 'ip',
+    '4.IP'          => 'ip',
 
     #  '4.NETMASK'			=> 'framed_mask',
     #  '4.SIMULTANEONSLY'	=> 'simultaneous_use',
     #  '4.SPEED'			=> 'speed',
-    '4.TP_ID' => 'paket',
+    '4.TP_ID'       => 'paket',
 
     #  '4.CALLBACK'			=> 'allow_callback',
 
-    '5.SUM' => 'balance',
+    '5.SUM'         => 'balance',
 
     #  '5.DESCRIBE'			=> "'Migration'",
     #  '5.ER'				=> undef,
@@ -1943,17 +1980,17 @@ sub get_nodeny {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -1980,16 +2017,18 @@ sub get_nodeny {
 }
 
 #**********************************************************
-# Export from Traffpro
+=head2 get_traffpro() - Export from Traffpro
+
+=cut
 #**********************************************************
 sub get_traffpro {
 
   my %fields = (
-    'LOGIN'       => 'login',
-    'PASSWORD'    => 'key',
-    '1.ACTIVATE'  => 'date',
-    '1.GID'       => 'id_groups',
-    '1.REDUCTION' => 'discount',
+    'LOGIN'            => 'login',
+    'PASSWORD'         => 'key',
+    '1.ACTIVATE'       => 'date',
+    '1.GID'            => 'id_groups',
+    '1.REDUCTION'      => 'discount',
 
     '3.ADDRESS_FLAT'   => 'apartment',
     '3.ADDRESS_STREET' => 'name',
@@ -1997,24 +2036,24 @@ sub get_traffpro {
     '3.COMMENTS'       => 'comment',
     '3.CONTRACT_ID'    => 'num_contract',
     '3.EMAIL'          => 'email',
-    '3.FIO'            => "surname",           # surname - �������,  name - ��� , patronymic - ��������
+    '3.FIO'            => "surname", # surname - �������,  name - ��� , patronymic - ��������
     '3.PHONE'          => 'phone_mob',
     '3.PASPORT_DATE'   => 'passport_date',
     '3.PASPORT_GRANT'  => 'passport_create',
     '3.PASPORT_NUM'    => 'passport_namber',
     '3.CITY'           => 'name',
 
-    '4.CID'   => 'addr_eth',
-    '4.IP'    => 'addr_ip',
-    '4.SPEED' => 'speed',
-    '4.TP_ID' => 'traff_tarif',
+    '4.CID'            => 'addr_eth',
+    '4.IP'             => 'addr_ip',
+    '4.SPEED'          => 'speed',
+    '4.TP_ID'          => 'traff_tarif',
 
-    '5.SUM' => 'traff_money_add',
+    '5.SUM'            => 'traff_money_add',
 
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "login, " . join(", \n", values(%fields));
+  #my $fields_list = "login, " . join(", \n", values(%fields));
 
   my $sql = "SELECT cl.login,
  				   pwd.key,
@@ -2057,17 +2096,18 @@ sub get_traffpro {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i <= $#row ; $i++) {
+    for (my $i = 1; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], |" . $fields_rev{"$query_fields->[$i]"} . "| -> $row[$i] \n";
       }
@@ -2094,15 +2134,17 @@ sub get_traffpro {
 }
 
 #**********************************************************
-# Export from Stargazer
+=head2 get_stargazer() Export from Stargazer
+
+=cut
 #**********************************************************
 sub get_stargazer {
 
   my %fields = (
-    'LOGIN'    => 'login',
-    'PASSWORD' => 'Password',
-    '1.CREDIT' => 'Credit',
-    '1.GID'    => 'StgGroup',
+    'LOGIN'            => 'login',
+    'PASSWORD'         => 'Password',
+    '1.CREDIT'         => 'Credit',
+    '1.GID'            => 'StgGroup',
 
     '3.ADDRESS_STREET' => 'Address',
     '3.COMMENTS'       => 'Note',
@@ -2110,10 +2152,10 @@ sub get_stargazer {
     '3.FIO'            => 'RealName',
     '3.PHONE'          => 'Phone',
 
-    '4.IP'    => 'IP',
-    '4.TP_ID' => 'Tariff',
+    '4.IP'             => 'IP',
+    '4.TP_ID'          => 'Tariff',
 
-    '5.SUM' => 'Cash',
+    '5.SUM'            => 'Cash',
 
   );
 
@@ -2130,17 +2172,17 @@ sub get_stargazer {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -2167,25 +2209,27 @@ sub get_stargazer {
 }
 
 #**********************************************************
-# Export from Stargazer
+=head2 get_stargazer_pg() - Export from Stargazer
+
+=cut
 #**********************************************************
 sub get_stargazer_pg {
 
   my %fields = (
-    'LOGIN'    => 'name',
-    'PASSWORD' => 'passwd',
-    '1.CREDIT' => 'credit',
+    'LOGIN'            => 'name',
+    'PASSWORD'         => 'passwd',
+    '1.CREDIT'         => 'credit',
 
     #  '1.GID'             => 'grp',
     '3.ADDRESS_STREET' => 'address',
     '3.COMMENTS'       => 'note',
 
     #  '3.EMAIL'           => 'email',
-    '3.FIO'   => 'real_name',
-    '3.PHONE' => 'phone',
-    '4.TP_ID' => 'fk_tariff',
-    '5.SUM'   => 'cash',
-    '4.IP'    => 'ip'
+    '3.FIO'            => 'real_name',
+    '3.PHONE'          => 'phone',
+    '4.TP_ID'          => 'fk_tariff',
+    '5.SUM'            => 'cash',
+    '4.IP'             => 'ip'
 
     #tb_users.pk_user - ��������� ���� ������������
     #tb_users.last_cash_add - ����� ���������� ����������
@@ -2208,17 +2252,18 @@ sub get_stargazer_pg {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -2245,21 +2290,23 @@ sub get_stargazer_pg {
 }
 
 #**********************************************************
-# Export from  nousaibot billing
+=head2 get_bbilling() Export from  nousaibot billing
+
+=cut
 #**********************************************************
 sub get_bbilling {
 
   my %fields = (
-    'LOGIN'    => 'CardNumber',
-    'PASSWORD' => 'PIN',
+    'LOGIN'             => 'CardNumber',
+    'PASSWORD'          => 'PIN',
 
     '3._serialnumber'   => 'SerialNumber',
     '3._tariffplanname' => 'TariffPlanName',
     '3._subscribername' => 'SubscriberName',
 
-    '4.TP_ID' => 'TariffPlanNameID',
+    '4.TP_ID'           => 'TariffPlanNameID',
 
-    '5.SUM' => 'Saldo',
+    '5.SUM'             => 'Saldo',
 
   );
 
@@ -2276,17 +2323,18 @@ sub get_bbilling {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output      = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i < $#row ; $i++) {
+    for (my $i = 1; $i < $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -2313,7 +2361,9 @@ sub get_bbilling {
 }
 
 #**********************************************************
-# Export easyhotspot
+=head2 get_easyhotspot() Export easyhotspot
+
+=cut
 #**********************************************************
 sub get_easyhotspot {
 
@@ -2343,17 +2393,17 @@ sub get_easyhotspot {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i <= $#row ; $i++) {
+    for (my $i = 1; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], |" . $fields_rev{"$query_fields->[$i]"} . "| -> $row[$i] \n";
       }
@@ -2379,31 +2429,34 @@ sub get_easyhotspot {
 }
 
 #**********************************************************
-# Export from lms
-# http://www.lms.org.pl/doc_en/devel-db.html
-# http://www.lms.org.pl
+=head2 get_lms() Export from lms
+
+   http://www.lms.org.pl/doc_en/devel-db.html
+   http://www.lms.org.pl
+
+=cut
 #**********************************************************
 sub get_lms {
 
   my %fields = (
-    'LOGIN'    => 'id',
-    'PASSWORD' => 'pin',
+    'LOGIN'            => 'id',
+    'PASSWORD'         => 'pin',
 
-    '1.GID'          => 'customergroupid',
-    '1.REGISTRATION' => 'FROM_UNIXTIME(c.creationdate)',
-    '1.DISABLE'      => 'deleted',
+    '1.GID'            => 'customergroupid',
+    '1.REGISTRATION'   => 'FROM_UNIXTIME(c.creationdate)',
+    '1.DISABLE'        => 'deleted',
 
     '3.ADDRESS_STREET' => 'if(c.address!=\'\', c.address, \'\')',
 
-    '3.COMMENTS' => 'if(c.message!=\'\', c.message, \'\')',
-    '3.EMAIL'    => 'if(c.email!=\'\', c.email, \'\')',
-    '3.FIO'      => 'if(c.lastname!=\'\', c.lastname, \'\')',
+    '3.COMMENTS'       => 'if(c.message!=\'\', c.message, \'\')',
+    '3.EMAIL'          => 'if(c.email!=\'\', c.email, \'\')',
+    '3.FIO'            => 'if(c.lastname!=\'\', c.lastname, \'\')',
 
-    '3.PHONE' => 'if(c.phone1!=\'\', c.phone1, \'\')',
-    '3.ZIP'   => 'if(c.zip!=\'\', c.zip, \'\')',
-    '3.CITY ' => 'if(c.city!=\'\', c.city, \'\')',
-    '4.TP_ID' => 'tariffplan',
-    '5.SUM'   => 'if((SELECT SUM(value) FROM cash WHERE customerid=c.id)!=\'\', (SELECT SUM(value) FROM cash WHERE customerid=c.id), \'\')',
+    '3.PHONE'          => 'if(c.phone1!=\'\', c.phone1, \'\')',
+    '3.ZIP'            => 'if(c.zip!=\'\', c.zip, \'\')',
+    '3.CITY '          => 'if(c.city!=\'\', c.city, \'\')',
+    '4.TP_ID'          => 'tariffplan',
+    '5.SUM'            => 'if((SELECT SUM(value) FROM cash WHERE customerid=c.id)!=\'\', (SELECT SUM(value) FROM cash WHERE customerid=c.id), \'\')',
 
   );
 
@@ -2441,17 +2494,17 @@ sub get_lms {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+
+  my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  my $output      = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1 ; $i <= $#row ; $i++) {
+    for (my $i = 1; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
@@ -2482,9 +2535,12 @@ sub get_lms {
 }
 
 #**********************************************************
-# Export lms nodes
-# http://www.lms.org.pl/doc_en/devel-db.html
-# http://www.lms.org.pl
+=head2 get_lms_nodes() Export lms nodes
+
+   http://www.lms.org.pl/doc_en/devel-db.html
+   http://www.lms.org.pl
+
+=cut
 #**********************************************************
 sub get_lms_nodes {
 
@@ -2493,26 +2549,30 @@ sub get_lms_nodes {
   if ($DEBUG > 0) {
     print "$sql\n";
   }
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
-  my $query_fields = $q->{NAME};
+
+  #my $query_fields = $q->{NAME};
 
   while (my @row = $q->fetchrow_array()) {
     print "$row[0]\t$row[1]\t$row[2]\n";
   }
+
   exit();
 }
 
 #**********************************************************
-#
+=head2 get_odbc()
+
+=cut
 #**********************************************************
 sub get_odbc {
 
   #, , , , , , connspeed__id
 
   my %fields = (
-    'LOGIN'    => 'user__login',
-    'PASSWORD' => 'user__pass',
+    'LOGIN'         => 'user__login',
+    'PASSWORD'      => 'user__pass',
 
     #  '1.ACTIVATE'     => 'activated',
     #  '1.EXPIRE' 	     => 'expired',
@@ -2522,8 +2582,8 @@ sub get_odbc {
 
     #  '1.REDUCTION'    => '',
     #'1.REGISTRATION' => 'DATE_FORMAT(FROM_UNIXTIME(reg_date), \'%Y-%m-%d\')',
-    '4.DISABLE' => 'user_state__id',
-    '1.DELETED' => 'user__deletedt',
+    '4.DISABLE'     => 'user_state__id',
+    '1.DELETED'     => 'user__deletedt',
 
     #  '3.ADDRESS_FLAT'   => '',
     #  '3.ADDRESS_STREET' => 'actual_address',
@@ -2535,12 +2595,12 @@ sub get_odbc {
     #  '3.PHONE'          => 'phone',
     #  '4.CID'            => '',
     #  '4.FILTER_ID'      => '',
-    '4.IP' => 'user__framed_ip_address',
+    '4.IP'          => 'user__framed_ip_address',
 
     #  '4.NETMASK'        => '\'255.255.255.255\'',
     #  '4.SIMULTANEONSLY' => 'simultaneous_use',
     #  '4.SPEED'          => 'speed',
-    '4.TP_ID' => 'tariff__id',
+    '4.TP_ID'       => 'tariff__id',
 
     #  '4.CALLBACK'       => 'allow_callback',
 
@@ -2568,11 +2628,11 @@ sub get_odbc {
   my $sql = "SELECT $fields_list FROM users";
   print "$sql\n" if ($DEBUG > 1);
 
-  my $q = $db->prepare($sql);
+  my DBI $q = $db->prepare($sql);
   $q->execute();
-  my $query_fields = $q->{NAME};
+  #my $query_fields = $q->{NAME};
 
-  my $output      = '';
+  #my $output = '';
   my %logins_hash = ();
 
   while (my $row = $q->fetchrow_hashref()) {
@@ -2607,19 +2667,17 @@ sub get_odbc {
 }
 
 #**********************************************************
-
 =head2 get_carbon4() - Import from Carbon 4
 
 =cut
-
 #**********************************************************
 sub get_carbon4 {
   my %fields = (
-    'LOGIN'      => 'LOGIN',
-    'PASSWORD'   => 'PSW',
-    '1.ACTIVATE' => 'ACTIVATE_DATE',
-    '1.GID'      => 'PARID',
-    '1.DISABLE'  => 'DISABLED',
+    'LOGIN'            => 'LOGIN',
+    'PASSWORD'         => 'PSW',
+    '1.ACTIVATE'       => 'ACTIVATE_DATE',
+    '1.GID'            => 'PARID',
+    '1.DISABLE'        => 'DISABLED',
 
     #    '1.REDUCTION' => 'discount',
 
@@ -2629,29 +2687,29 @@ sub get_carbon4 {
 
     #    '3.COMMENTS'       => 'comment',
     #    '3.CONTRACT_ID'    => 'num_contract',
-    '3.EMAIL'         => 'EMAIL',
-    '3.FIO'           => 'IDENTIFY',
-    '3.PHONE'         => 'PHONE',
-    '3.PASPORT_DATE'  => 'PASPORT_DATE',
-    '3.PASPORT_GRANT' => 'PASPORT_GRANT',
-    '3.PASPORT_NUM'   => 'PASPORT_NUM',
-    '3.CITY'          => 'CITY',
+    '3.EMAIL'          => 'EMAIL',
+    '3.FIO'            => 'IDENTIFY',
+    '3.PHONE'          => 'PHONE',
+    '3.PASPORT_DATE'   => 'PASPORT_DATE',
+    '3.PASPORT_GRANT'  => 'PASPORT_GRANT',
+    '3.PASPORT_NUM'    => 'PASPORT_NUM',
+    '3.CITY'           => 'CITY',
 
-    '4.CID'   => 'MAC',
-    '4.IP'    => 'IP',
-    '4.SPEED' => 'LIMIT',
-    '4.TP_ID' => 'TARIFF_NO',
+    '4.CID'            => 'MAC',
+    '4.IP'             => 'IP',
+    '4.SPEED'          => 'LIMIT',
+    '4.TP_ID'          => 'TARIFF_NO',
 
-    '5.SUM' => 'OSTATOK',
+    '5.SUM'            => 'OSTATOK',
 
   );
 
-  my %fields_rev = reverse(%fields);
-  my $fields_list = "login, " . join(", \n", values(%fields));
+#  my %fields_rev = reverse(%fields);
+#  my $fields_list = "login, " . join(", \n", values(%fields));
 
   my %attribute_type_id_for = (
-    PHONE       => 1,
-    PASPORT_NUM => 13,
+    PHONE        => 1,
+    PASPORT_NUM  => 13,
 
     #    PASPORT_SER => 15,
     PASPORT_BY   => 16,
@@ -2712,8 +2770,10 @@ sub get_carbon4 {
 
   # DB charset is CP1251, and we are working in UTF8
   # so need to convert some of columns got from DB
-  eval { require Encode; };
-  if (@!) {
+
+  eval {require Encode;};
+
+  if ($@) {
     print "Please install 'Encode' perl module\n";
 
     #    print "Manual: http://abills.net.ua/wiki/doku.php/abills:docs:manual:soft:perl_odbc \n";
@@ -2733,7 +2793,7 @@ sub get_carbon4 {
     return $list;
   };
 
-  my @columns_can_contain_cyrillic_values = qw/ IDENTIFY PASPORT_GRANT PSW /;
+  my @columns_can_contain_cyrillic_values = qw/IDENTIFY PASPORT_GRANT PSW/;
   $users_list = &{$convert_in_hashref_sub}([ values %{$users_list} ], \@columns_can_contain_cyrillic_values);
 
   foreach my $user (@{$users_list}) {
@@ -2776,7 +2836,6 @@ sub get_carbon4 {
   }
 
   exit;
-
 }
 
 #**********************************************************
@@ -2797,18 +2856,19 @@ sub sync_deposit {
   my ($update_list) = @_;
 
   foreach my $user_hash (values %{$update_list}) {
-    my $login   = $user_hash->{LOGIN};
+    my $login = $user_hash->{LOGIN};
     my $new_sum = $user_hash->{NEW_SUM};
 
     my $sql = "UPDATE bills SET deposit= ? WHERE uid=(SELECT uid FROM users WHERE id= ? )";
 
-    my $q = $db->prepare($sql);
+    my DBI $q = $db->prepare($sql);
 
     $q->execute($new_sum, $login);
 
     print 'Changed ' . $login . ' deposit to ' . $new_sum . "\n";
   }
 
+  return 1;
 }
 
 1
