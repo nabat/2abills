@@ -1639,7 +1639,7 @@ sub get_mikbill {
     '3._mob_tel'       => 'mob_tel',
     '4.IP'             => 'framed_ip',
     '4.NETMASK'        => 'framed_mask',
-    '4.TP_ID'          => 'gid',
+    '4.TP_NUM'         => 'gid',
     '5.SUM'            => 'deposit',
   );
 
@@ -1742,7 +1742,7 @@ sub get_mikbill_deleted {
     '3._mob_tel'       => 'mob_tel',
     '4.IP'             => 'framed_ip',
     '4.NETMASK'        => 'framed_mask',
-    '4.TP_ID'          => 'gid',
+    '4.TP_NUM'         => 'gid',
     '5.SUM'            => 'deposit',
   );
 
@@ -1844,7 +1844,7 @@ sub get_mikbill_blocked {
     '3._mob_tel'       => 'mob_tel',
     '4.IP'             => 'framed_ip',
     '4.NETMASK'        => 'framed_mask',
-    '4.TP_ID'          => 'gid',
+    '4.TP_NUM'         => 'gid',
     '5.SUM'            => 'deposit',
   );
 
