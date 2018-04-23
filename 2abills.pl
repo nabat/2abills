@@ -25,8 +25,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.74
-  UPDATE: 20180331
+  VERSION: 0.75
+  UPDATE: 20180422
 
 =cut
 
@@ -1616,7 +1616,9 @@ sub parse_arguments {
 #  KEY `user` (`user`)
 
 #**********************************************************
-# Export from Mikbill
+=head2 get_mikbill() -  Export from Mikbill
+
+=cut
 #**********************************************************
 sub get_mikbill {
 
@@ -1641,37 +1643,47 @@ sub get_mikbill {
     '4.NETMASK'        => 'framed_mask',
     '4.TP_NUM'         => 'gid',
     '5.SUM'            => 'deposit',
+    '3._DISTRICT'      => 'district',
+    '3._CEL_PHONE'     => 'sms_tel',
+    '3._MOB_TEL'       => 'mob_tel',
+
   );
 
   my %fields_rev = reverse(%fields);
   #my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT
-user,
-user,
-password,
-expired,
-credit,
-add_date,
-blocked,
-app,
-address,
-h.house as houseid,
-prim,
-numdogovor,
-email,
-fio,
-passportserie,
-phone,
-mob_tel,
-framed_ip,
-framed_mask,
-gid,
-deposit
+    u.user,
+    u.user,
+    u.password,
+    u.expired,
+    u.credit,
+    u.add_date,
+    u.blocked,
+    u.app,
+    u.address,
+    h.house as houseid,
+    u.prim,
+    u.numdogovor,
+    u.email,
+    u.fio,
+    u.passportserie,
+    u.phone,
+    u.mob_tel,
+    u.sms_tel,
+    u.framed_ip,
+    u.framed_mask,
+    u.gid,
+    u.deposit,
+    lanes_neighborhoods.neighborhoodname AS district
   FROM users
-  LEFT JOIN lanes_houses h ON ( users.houseid = h.houseid )";
+  LEFT JOIN lanes_houses h ON ( users.houseid = h.houseid )
+  LEFT JOIN lanes ON (lanes_houses.laneid = lanes.laneid)
+  LEFT JOIN lanes_neighborhoods ON (lanes_houses.neighborhoodid = lanes_neighborhoods.neighborhoodid)
+GROUP BY u.uid
+;
+";
 
-  #print $sql;
   if ($DEBUG > 4) {
     print $sql;
     return 0;
@@ -1679,11 +1691,11 @@ deposit
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
+
   my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
@@ -1708,7 +1720,6 @@ deposit
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
       $logins_hash{$LOGIN}{$k} = $v;
     }
-
   }
 
   undef($q);
@@ -1744,6 +1755,9 @@ sub get_mikbill_deleted {
     '4.NETMASK'        => 'framed_mask',
     '4.TP_NUM'         => 'gid',
     '5.SUM'            => 'deposit',
+    '3._DISTRICT'      => 'lanes_neighborhoods.neighborhoodname AS raion',
+    '3._CEL_PHONE'     => 'sms_tel',
+    '3._MOB_TEL'       => 'mob_tel',
   );
 
   my %fields_rev = reverse(%fields);
@@ -1841,11 +1855,13 @@ sub get_mikbill_blocked {
     '3.FIO'            => 'fio',
     '5.PASPORT_GRANT'  => 'passportserie',
     '3.PHONE'          => 'phone',
-    '3._mob_tel'       => 'mob_tel',
     '4.IP'             => 'framed_ip',
     '4.NETMASK'        => 'framed_mask',
     '4.TP_NUM'         => 'gid',
     '5.SUM'            => 'deposit',
+    '3._DISTRICT'      => 'lanes_neighborhoods.neighborhoodname AS raion',
+    '3._CEL_PHONE'     => 'sms_tel',
+    '3._MOB_TEL'       => 'mob_tel',
   );
 
   my %fields_rev = reverse(%fields);
