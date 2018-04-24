@@ -1638,7 +1638,6 @@ sub get_mikbill {
     '3.FIO'            => 'fio',
     '5.PASPORT_GRANT'  => 'passportserie',
     '3.PHONE'          => 'phone',
-    '3._mob_tel'       => 'mob_tel',
     '4.IP'             => 'framed_ip',
     '4.NETMASK'        => 'framed_mask',
     '4.TP_NUM'         => 'gid',
@@ -1646,7 +1645,6 @@ sub get_mikbill {
     '3._DISTRICT'      => 'district',
     '3._CEL_PHONE'     => 'sms_tel',
     '3._MOB_TEL'       => 'mob_tel',
-
   );
 
   my %fields_rev = reverse(%fields);
@@ -1676,10 +1674,10 @@ sub get_mikbill {
     u.gid,
     u.deposit,
     lanes_neighborhoods.neighborhoodname AS district
-  FROM users
-  LEFT JOIN lanes_houses h ON ( users.houseid = h.houseid )
-  LEFT JOIN lanes ON (lanes_houses.laneid = lanes.laneid)
-  LEFT JOIN lanes_neighborhoods ON (lanes_houses.neighborhoodid = lanes_neighborhoods.neighborhoodid)
+  FROM users u
+  LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
+  LEFT JOIN lanes ON (h.laneid = lanes.laneid)
+  LEFT JOIN lanes_neighborhoods ON (h.neighborhoodid = lanes_neighborhoods.neighborhoodid)
 GROUP BY u.uid
 ;
 ";
@@ -1750,7 +1748,6 @@ sub get_mikbill_deleted {
     '3.FIO'            => 'fio',
     '5.PASPORT_GRANT'  => 'passportserie',
     '3.PHONE'          => 'phone',
-    '3._mob_tel'       => 'mob_tel',
     '4.IP'             => 'framed_ip',
     '4.NETMASK'        => 'framed_mask',
     '4.TP_NUM'         => 'gid',
