@@ -1623,24 +1623,28 @@ sub parse_arguments {
 sub get_mikbill {
 
   my %fields = (
-    'LOGIN'            => 'user',
-    'PASSWORD'         => 'password',
-    '1.EXPIRE'         => 'expired',
-    '1.CREDIT'         => 'credit',
-    '1.REGISTRATION'   => 'add_date',
-    '1.DISABLE'        => 'blocked',
-    '3.ADDRESS_FLAT'   => 'app',
-    '3.ADDRESS_STREET' => 'address',
-    '3.ADDRESS_BUILD'  => 'houseid',
-    '3.COMMENTS'       => 'prim',
-    '3.CONTRACT_ID'    => 'numdogovor',
-    '3.EMAIL'          => 'email',
-    '3.FIO'            => 'fio',
-    '5.PASPORT_GRANT'  => 'passportserie',
-    '3.PHONE'          => 'phone',
-    '4.IP'             => 'framed_ip',
-    '4.NETMASK'        => 'framed_mask',
-    '4.TP_NUM'         => 'gid',
+    'LOGIN'               => 'user',
+    'PASSWORD'            => 'password',
+    '1.EXPIRE'            => 'expired',
+    '1.CREDIT'            => 'credit',
+    '1.REGISTRATION'      => 'add_date',
+    '1.DISABLE'           => 'blocked',
+    '3.ADDRESS_FLAT'      => 'app',
+    '3.ADDRESS_STREET'    => 'address',
+    '3.ADDRESS_BUILD'     => 'houseid',
+    '3.COMMENTS'          => 'prim',
+    '3.CONTRACT_ID'       => 'numdogovor',
+    '3.EMAIL'             => 'email',
+    '3.FIO'               => 'fio',
+    '5.PASPORT_GRANT'     => 'passportserie',
+    '3.PHONE'             => 'phone',
+    '4.IP'                => 'framed_ip',
+    '4.NETMASK'           => 'framed_mask',
+    '4.TP_NUM'            => 'gid',
+    '4.CID'               => 'local_mac',
+    '4.TP_NAME'           => 'tp_name',
+    '4.MONTH_FEE'         => 'month_fee',
+    '4.USER_CREDIT_LIMIT' => 'user_credit_limit',
     '5.SUM'            => 'deposit',
     '3._DISTRICT'      => 'district',
     '3._CEL_PHONE'     => 'sms_tel',
@@ -1648,7 +1652,6 @@ sub get_mikbill {
   );
 
   my %fields_rev = reverse(%fields);
-  #my $fields_list = "user, " . join(", \n", values(%fields));
 
   my $sql = "SELECT
     u.user,
@@ -1673,13 +1676,19 @@ sub get_mikbill {
     u.framed_mask,
     u.gid,
     u.deposit,
-    lanes_neighborhoods.neighborhoodname AS district
+    u.local_mac,
+    lanes_neighborhoods.neighborhoodname AS district,
+   p.fixed_cost AS month_fee,
+   p.packet AS tp_name,
+   p.do_fixed_credit_summa AS user_credit_limit
+
   FROM users u
   LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
   LEFT JOIN lanes ON (h.laneid = lanes.laneid)
   LEFT JOIN lanes_neighborhoods ON (h.neighborhoodid = lanes_neighborhoods.neighborhoodid)
-GROUP BY u.uid
-;
+  LEFT JOIN packets p ON (u.gid = p.gid)
+
+  GROUP BY u.uid;
 ";
 
   if ($DEBUG > 4) {
@@ -1933,6 +1942,40 @@ deposit
   undef($q);
   return \%logins_hash;
 }
+
+#**********************************************************
+=head2 mikbill_pools() Export from Nodeny
+
+
+=cut
+#**********************************************************
+sub mikbill_pools {
+
+  my $sql =  "INSERT INTO abills.ippools (name, netmask, ip, dns, gateway, vlan, comments)
+  SELECT sector, INET_ATON(mask), INET_ATON(subnet), dns_serv, INET_ATON(routers), vlanid,
+    CONCAT(iface, '/', sectorid)
+   FROM sectors;";
+
+  if($debug > 3) {
+    print $sql;
+  }
+
+  return 1;
+}
+
+#**********************************************************
+=head2 mikbill_payments() Export from Nodeny
+
+
+=cut
+#**********************************************************
+sub mikbill_payments {
+
+  #my $sql =  "select sectorid,sector,iface,mask,subnet,dns_serv,routers,dns_serv2,vlanid from sectors;";
+
+  return 1;
+}
+
 
 #**********************************************************
 =head2 get_nodeny() Export from Nodeny
