@@ -1645,7 +1645,7 @@ sub get_mikbill {
     '4.TP_NAME'           => 'tp_name',
     '4.MONTH_FEE'         => 'month_fee',
     '4.USER_CREDIT_LIMIT' => 'user_credit_limit',
-    '4.speed'             => 'speed',
+    '4.SPEED'             => 'speed',
     '5.SUM'               => 'deposit',
     '3._DISTRICT'         => 'district',
     '3._CEL_PHONE'        => 'sms_tel',
@@ -1684,7 +1684,7 @@ sub get_mikbill {
    p.packet AS tp_name,
    p.do_fixed_credit_summa AS user_credit_limit,
    u.fixed_cost AS reduction,
-   inetspeedlist.user_speed_in AS speed
+   inetspeedlist.user_speed_in / 1024 AS speed
 
   FROM users u
   LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
