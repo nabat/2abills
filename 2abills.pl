@@ -25,8 +25,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.75
-  UPDATE: 20180422
+  VERSION: 0.76
+  UPDATE: 20180516
 
 =cut
 
@@ -35,38 +35,38 @@ use strict;
 use FindBin '$Bin';
 use Encode;
 
-my $ARGUMENTS = parse_arguments(\@ARGV);
-my $VERSION = 0.74;
+my $argv = parse_arguments(\@ARGV);
+my $VERSION = 0.76;
 
 our (%conf);
 
 #DB information
-my $dbhost = $ARGUMENTS->{DB_HOST} || "127.0.0.1";
-my $dbname = $ARGUMENTS->{DB_NAME} || "abills";
-my $dbuser = $ARGUMENTS->{DB_USER} || "root";
-my $dbpasswd = $ARGUMENTS->{DB_PASSWORD} || "";
-my $dbtype = $ARGUMENTS->{DB_TYPE} || "mysql"; #Pg
-my $encryption_key = $ARGUMENTS->{PASSSWD_ENCRYPTION_KEY};
+my $dbhost = $argv->{DB_HOST} || "127.0.0.1";
+my $dbname = $argv->{DB_NAME} || "abills";
+my $dbuser = $argv->{DB_USER} || "root";
+my $dbpasswd = $argv->{DB_PASSWORD} || "";
+my $dbtype = $argv->{DB_TYPE} || "mysql"; #Pg
+my $encryption_key = $argv->{PASSSWD_ENCRYPTION_KEY};
 
-if (defined($ARGUMENTS->{'help'}) || $#ARGV < 0) {
+if (defined($argv->{'help'}) || $#ARGV < 0) {
   help();
   exit 0;
 }
 
-my $IMPORT_FILE = $ARGUMENTS->{IMPORT_FILE} || '';
-my $FILE_FIELDS = $ARGUMENTS->{FILE_FIELDS} || '';
-my $DEFAULT_PASSWORD = $ARGUMENTS->{DEFAULT_PASSWORD} || 'xxxx';
+my $IMPORT_FILE = $argv->{IMPORT_FILE} || '';
+my $FILE_FIELDS = $argv->{FILE_FIELDS} || '';
+my $DEFAULT_PASSWORD = $argv->{DEFAULT_PASSWORD} || 'xxxx';
 #my $email_export     = $ARGUMENTS->{EMAIL_CREATE}     || 1; #FIXME : missing functions
-my $EMAIL_DOMAIN_ID = $ARGUMENTS->{EMAIL_DOMAIN} || 1;
-my $DEBUG = $ARGUMENTS->{DEBUG} || 0;
+my $EMAIL_DOMAIN_ID = $argv->{EMAIL_DOMAIN} || 1;
+my $DEBUG = $argv->{DEBUG} || 0;
 #my $no_deposit       = $ARGUMENTS->{NO_DEPOSIT}       || 0; #FIXME : missing functions
-my $EXCHANGE_RATE = $ARGUMENTS->{EXCHANGE_RATE} || 0;
-my $FORMAT = ($ARGUMENTS->{'HTML'}) ? 'html' : '';
-my $SYNC_DEPOSIT = $ARGUMENTS->{SYNC_DEPOSIT} || 0;
-
+my $EXCHANGE_RATE = $argv->{EXCHANGE_RATE} || 0;
+my $FORMAT = ($argv->{'HTML'}) ? 'html' : '';
+my $SYNC_DEPOSIT = $argv->{SYNC_DEPOSIT} || 0;
 my %EXTENDED_STATIC_FIELDS = ();
+my $debug = $argv->{DEBUG} || 0;
 
-while (my ($k, $v) = each(%$ARGUMENTS)) {
+  while (my ($k, $v) = each(%$argv)) {
   if ($k =~ /^(\d)\./) {
     $EXTENDED_STATIC_FIELDS{$k} = $v;
     print "Extended: $k -> $v\n" if ($DEBUG > 1);
@@ -75,16 +75,16 @@ while (my ($k, $v) = each(%$ARGUMENTS)) {
 
 my DBI $db;
 
-if ($ARGUMENTS->{ADD_NAS}) {
+if ($argv->{ADD_NAS}) {
   add_nas();
   exit;
 }
 
-if ($ARGUMENTS->{FROM}) {
-  if ($ARGUMENTS->{FROM} eq 'stargazer_pg') {
+if ($argv->{FROM}) {
+  if ($argv->{FROM} eq 'stargazer_pg') {
     $dbtype = 'Pg';
   }
-  elsif ($ARGUMENTS->{FROM} eq 'odbc' || $ARGUMENTS->{FROM} eq 'carbon4') {
+  elsif ($argv->{FROM} eq 'odbc' || $argv->{FROM} eq 'carbon4') {
     $dbtype = 'ODBC';
     my $db_dsn = 'MSSQL';
 
@@ -96,7 +96,7 @@ if ($ARGUMENTS->{FROM}) {
     }
     DBD::ODBC->import();
 
-    if ($ARGUMENTS->{FROM} eq 'carbon4') {
+    if ($argv->{FROM} eq 'carbon4') {
       $db = get_connection_to_firebird_host($dbhost, '/var/db/ics_main.gdb', $dbpasswd);
     }
     else {
@@ -111,14 +111,14 @@ if ($ARGUMENTS->{FROM}) {
   }
 }
 
-if ($ARGUMENTS->{DB_CHARSET}) {
-  $db->do("set names $ARGUMENTS->{DB_CHARSET}");
+if ($argv->{DB_CHARSET}) {
+  $db->do("set names $argv->{DB_CHARSET}");
 }
 
 #Tarif migration section
 my %TP_MIGRATION = ();
-if ($ARGUMENTS->{TP_MIGRATION}) {
-  my $rows = file_content($ARGUMENTS->{TP_MIGRATION});
+if ($argv->{TP_MIGRATION}) {
+  my $rows = file_content($argv->{TP_MIGRATION});
 
   foreach my $line (@$rows) {
     my ($old, $new) = split(/=/, $line, 2);
@@ -128,30 +128,30 @@ if ($ARGUMENTS->{TP_MIGRATION}) {
 
 my $INFO_LOGINS;
 
-if ($ARGUMENTS->{FROM}) {
-  if ($ARGUMENTS->{FROM} eq 'freenibs') {
+if ($argv->{FROM}) {
+  if ($argv->{FROM} eq 'freenibs') {
     $INFO_LOGINS = get_freenibs_users();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'mabill') {
+  elsif ($argv->{FROM} eq 'mabill') {
     $INFO_LOGINS = get_freenibs_users({ MABILL => 1 });
   }
-  elsif ($ARGUMENTS->{FROM} eq 'utm4') {
+  elsif ($argv->{FROM} eq 'utm4') {
     $INFO_LOGINS = get_utm4_users();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'utm5') {
+  elsif ($argv->{FROM} eq 'utm5') {
     $INFO_LOGINS = get_utm5_users();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'utm5cards') {
+  elsif ($argv->{FROM} eq 'utm5cards') {
     utm5cards();
     exit;
   }
-  elsif ($ARGUMENTS->{FROM} eq 'utm5pg') {
+  elsif ($argv->{FROM} eq 'utm5pg') {
     $INFO_LOGINS = get_utm5pg_users();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'unisys') {
+  elsif ($argv->{FROM} eq 'unisys') {
     $INFO_LOGINS = get_unisys();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'file') {
+  elsif ($argv->{FROM} eq 'file') {
     if ($SYNC_DEPOSIT) {
       $FILE_FIELDS = 'LOGIN,NEW_SUM';
       $IMPORT_FILE = $SYNC_DEPOSIT;
@@ -163,46 +163,46 @@ if ($ARGUMENTS->{FROM}) {
       $INFO_LOGINS = get_file();
     }
   }
-  elsif ($ARGUMENTS->{FROM} eq 'abills') {
+  elsif ($argv->{FROM} eq 'abills') {
     $INFO_LOGINS = get_abills();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'mikbill') {
+  elsif ($argv->{FROM} eq 'mikbill') {
     $INFO_LOGINS = get_mikbill();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'mikbill_deleted') {
+  elsif ($argv->{FROM} eq 'mikbill_deleted') {
     $INFO_LOGINS = get_mikbill_deleted();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'mikbill_blocked') {
+  elsif ($argv->{FROM} eq 'mikbill_blocked') {
     $INFO_LOGINS = get_mikbill_blocked();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'nodeny') {
+  elsif ($argv->{FROM} eq 'nodeny') {
     $INFO_LOGINS = get_nodeny();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'traffpro') {
+  elsif ($argv->{FROM} eq 'traffpro') {
     $INFO_LOGINS = get_traffpro();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'stargazer') {
+  elsif ($argv->{FROM} eq 'stargazer') {
     $INFO_LOGINS = get_stargazer();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'stargazer_pg') {
+  elsif ($argv->{FROM} eq 'stargazer_pg') {
     $INFO_LOGINS = get_stargazer_pg();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'easyhotspot') {
+  elsif ($argv->{FROM} eq 'easyhotspot') {
     $INFO_LOGINS = get_easyhotspot();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'bbilling') {
+  elsif ($argv->{FROM} eq 'bbilling') {
     $INFO_LOGINS = get_bbilling();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'lms') {
+  elsif ($argv->{FROM} eq 'lms') {
     $INFO_LOGINS = get_lms();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'lms_nodes') {
+  elsif ($argv->{FROM} eq 'lms_nodes') {
     $INFO_LOGINS = get_lms_nodes();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'odbc') {
+  elsif ($argv->{FROM} eq 'odbc') {
     $INFO_LOGINS = get_odbc();
   }
-  elsif ($ARGUMENTS->{FROM} eq 'carbon4') {
+  elsif ($argv->{FROM} eq 'carbon4') {
     $INFO_LOGINS = get_carbon4();
   }
 
@@ -247,7 +247,7 @@ sub add_nas {
   $FILE_FIELDS =~ s/\s//g;
   my @fiealds_arr = split(/,/, $FILE_FIELDS);
 
-  my $arr = file_content($ARGUMENTS->{ADD_NAS});
+  my $arr = file_content($argv->{ADD_NAS});
   my @add_arr_hash = ();
 
   foreach my $line (@$arr) {
@@ -1257,7 +1257,7 @@ sub show {
 
   @titls = sort keys %{$logins_info->{$login}};
 
-  if ($ARGUMENTS->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
+  if ($argv->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
     push @titls, '1.UID';
   }
 
@@ -1275,7 +1275,7 @@ sub show {
   foreach my $login_ (sort keys %$logins_info) {
 
     #add login to uid
-    if ($ARGUMENTS->{LOGIN2UID} && !$logins_info->{$login_}{'1.UID'}) {
+    if ($argv->{LOGIN2UID} && !$logins_info->{$login_}{'1.UID'}) {
       $logins_info->{$login_}{'1.UID'} = $login_;
     }
 
@@ -1293,7 +1293,7 @@ sub show {
         }
         next if ($exaption{$column_title});
         my $value = $logins_info->{$login_}{$column_title} || q{};
-        if ($ARGUMENTS->{win2utf}) {
+        if ($argv->{win2utf}) {
           $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
         }
 
@@ -1308,7 +1308,7 @@ sub show {
         next if ($exaption{$column_title});
 
         my $value = $logins_info->{$login_}{$column_title} || q{};
-        if ($ARGUMENTS->{win2utf}) {
+        if ($argv->{win2utf}) {
           $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
         }
 
@@ -1318,14 +1318,14 @@ sub show {
 
         #Address full
         if ($column_title eq '3.ADDRESS_FULL') {
-          if ($ARGUMENTS->{ADDRESS_DELIMITER}) {
-            my ($delimiter1, $delimiter2) = split(/,/, $ARGUMENTS->{ADDRESS_DELIMITER}, 2);
+          if ($argv->{ADDRESS_DELIMITER}) {
+            my ($delimiter1, $delimiter2) = split(/,/, $argv->{ADDRESS_DELIMITER}, 2);
 
             if (!$delimiter2) {
               $delimiter2 = '';
             }
 
-            if ($ARGUMENTS->{win2utf}) {
+            if ($argv->{win2utf}) {
               $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
             }
 
@@ -1358,13 +1358,13 @@ sub show {
         }
       }
 
-      if ($ARGUMENTS->{SKIP_ERROR_PARAM}) {
+      if ($argv->{SKIP_ERROR_PARAM}) {
         $output .= "SKIP_ERRORS=1\t4.INTERNET_SKIP_FEE=1\t";
       }
 
-      if ($ARGUMENTS->{ADD_PARAMS}) {
-        $ARGUMENTS->{ADD_PARAMS} =~ s/,/\t/g;
-        $output .= "$ARGUMENTS->{ADD_PARAMS}\t";
+      if ($argv->{ADD_PARAMS}) {
+        $argv->{ADD_PARAMS} =~ s/,/\t/g;
+        $output .= "$argv->{ADD_PARAMS}\t";
       }
 
       $output .= "\n";
