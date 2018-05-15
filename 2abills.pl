@@ -1645,10 +1645,12 @@ sub get_mikbill {
     '4.TP_NAME'           => 'tp_name',
     '4.MONTH_FEE'         => 'month_fee',
     '4.USER_CREDIT_LIMIT' => 'user_credit_limit',
-    '5.SUM'            => 'deposit',
-    '3._DISTRICT'      => 'district',
-    '3._CEL_PHONE'     => 'sms_tel',
-    '3._MOB_TEL'       => 'mob_tel',
+    '4.speed'             => 'speed',
+    '5.SUM'               => 'deposit',
+    '3._DISTRICT'         => 'district',
+    '3._CEL_PHONE'        => 'sms_tel',
+    '3._MOB_TEL'          => 'mob_tel',
+    '1.REDUCTION'         => 'reduction',
   );
 
   my %fields_rev = reverse(%fields);
@@ -1680,13 +1682,16 @@ sub get_mikbill {
     lanes_neighborhoods.neighborhoodname AS district,
    p.fixed_cost AS month_fee,
    p.packet AS tp_name,
-   p.do_fixed_credit_summa AS user_credit_limit
+   p.do_fixed_credit_summa AS user_credit_limit,
+   u.fixed_cost AS reduction,
+   inetspeedlist.user_speed_in AS speed
 
   FROM users u
   LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
   LEFT JOIN lanes ON (h.laneid = lanes.laneid)
   LEFT JOIN lanes_neighborhoods ON (h.neighborhoodid = lanes_neighborhoods.neighborhoodid)
   LEFT JOIN packets p ON (u.gid = p.gid)
+  LEFT JOIN inetspeedlist ON (u.user=inetspeedlist.username)
 
   GROUP BY u.uid;
 ";
@@ -1865,7 +1870,7 @@ sub get_mikbill_blocked {
     '4.NETMASK'        => 'framed_mask',
     '4.TP_NUM'         => 'gid',
     '5.SUM'            => 'deposit',
-    '3._DISTRICT'      => 'lanes_neighborhoods.neighborhoodname AS raion',
+    '3._DISTRICT'      => 'lanes_neighborhoods.neighborhoodname AS ragion',
     '3._CEL_PHONE'     => 'sms_tel',
     '3._MOB_TEL'       => 'mob_tel',
   );
