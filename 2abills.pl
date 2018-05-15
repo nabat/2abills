@@ -1684,7 +1684,7 @@ sub get_mikbill {
    p.packet AS tp_name,
    p.do_fixed_credit_summa AS user_credit_limit,
    u.fixed_cost AS reduction,
-   inetspeedlist.user_speed_in / 1024 AS speed
+   IF(inetspeedlist.user_speed_in > 0, inetspeedlist.user_speed_in / 1024, '') AS speed
 
   FROM users u
   LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
