@@ -1651,49 +1651,54 @@ sub get_mikbill {
     '3._CEL_PHONE'        => 'sms_tel',
     '3._MOB_TEL'          => 'mob_tel',
     '1.REDUCTION'         => 'reduction',
+    '3.ENTRANCE'          => 'entrance',
+    '3.FLOOR'             => 'floor'
   );
 
   my %fields_rev = reverse(%fields);
 
   my $sql = "SELECT
-    u.user,
-    u.user,
-    u.password,
-    u.expired,
-    u.credit,
-    u.add_date,
-    u.blocked,
-    u.app,
-    u.address,
-    h.house as houseid,
-    u.prim,
-    u.numdogovor,
-    u.email,
-    u.fio,
-    u.passportserie,
-    u.phone,
-    u.mob_tel,
-    u.sms_tel,
-    u.framed_ip,
-    u.framed_mask,
-    u.gid,
-    u.deposit,
-    u.local_mac,
-    lanes_neighborhoods.neighborhoodname AS district,
-   p.fixed_cost AS month_fee,
-   p.packet AS tp_name,
-   p.do_fixed_credit_summa AS user_credit_limit,
-   u.fixed_cost AS reduction,
-   IF(inetspeedlist.user_speed_in > 0, inetspeedlist.user_speed_in / 1024, '') AS speed
+  u.user,
+  u.user,
+  u.password,
+  u.expired,
+  u.credit,
+  u.add_date,
+  u.blocked,
+  u.prim,
+  u.numdogovor,
+  u.email,
+  u.fio,
+  u.passportserie,
+  u.phone,
+  u.mob_tel,
+  u.sms_tel,
+  u.framed_ip,
+  u.framed_mask,
+  u.gid,
+  u.deposit,
+  u.local_mac,
+  p.fixed_cost AS month_fee,
+  p.packet AS tp_name,
+  p.do_fixed_credit_summa AS user_credit_limit,
+  u.fixed_cost AS reduction,
+  IF(inetspeedlist.user_speed_in > 0, inetspeedlist.user_speed_in / 1024, '') AS speed,
+  lanes_neighborhoods.neighborhoodname AS district,
+  IF(u.app<>u.app, u.app, '') AS app,
+  IF(u.address<>'', u.address, addr.lane) AS address,
+  IF(h.house<>'', h.house, addr.house) AS houseid,
+  addr.porches AS entrance,
+  addr.floors AS floor
 
-  FROM users u
+FROM users u
   LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
   LEFT JOIN lanes ON (h.laneid = lanes.laneid)
   LEFT JOIN lanes_neighborhoods ON (h.neighborhoodid = lanes_neighborhoods.neighborhoodid)
   LEFT JOIN packets p ON (u.gid = p.gid)
   LEFT JOIN inetspeedlist ON (u.user=inetspeedlist.username)
+  LEFT JOIN usersadress addr ON (addr.user=u.user)
 
-  GROUP BY u.uid;
+GROUP BY u.uid;
 ";
 
   if ($DEBUG > 4) {
@@ -1956,9 +1961,9 @@ deposit
 #**********************************************************
 sub mikbill_pools {
 
-  my $sql =  "INSERT INTO abills.ippools (name, netmask, ip, dns, gateway, vlan, comments)
+  my $sql =  "INSERT INTO abills.ippools (name, netmask, ip, dns, gateway, vlan, comments, static, counts)
   SELECT sector, INET_ATON(mask), INET_ATON(subnet), dns_serv, INET_ATON(routers), vlanid,
-    CONCAT(iface, '/', sectorid)
+    CONCAT(iface, '/', sectorid), 1, 253
    FROM sectors;";
 
   if($debug > 3) {
