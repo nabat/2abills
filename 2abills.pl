@@ -1685,7 +1685,7 @@ sub get_mikbill {
   IF(inetspeedlist.user_speed_in > 0, inetspeedlist.user_speed_in / 1024, '') AS speed,
   lanes_neighborhoods.neighborhoodname AS district,
   IF(u.app<>u.app, u.app, '') AS app,
-  IF(u.address<>'', u.address, addr.lane) AS address,
+  IF(addr.lane<>'', addr.lane, u.address) AS address,
   IF(h.house<>'', h.house, addr.house) AS houseid,
   addr.porches AS entrance,
   addr.floors AS floor
