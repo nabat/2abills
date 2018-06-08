@@ -25,8 +25,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.76
-  UPDATE: 20180516
+  VERSION: 0.79
+  UPDATE: 20180607
 
 =cut
 
@@ -36,7 +36,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.76;
+my $VERSION = 0.79;
 
 our (%conf);
 
@@ -167,14 +167,20 @@ if ($argv->{FROM}) {
     $INFO_LOGINS = get_abills();
   }
   elsif ($argv->{FROM} eq 'mikbill') {
-    $INFO_LOGINS = get_mikbill();
+    $INFO_LOGINS = get_mikbill({  });
   }
   elsif ($argv->{FROM} eq 'mikbill_deleted') {
-    $INFO_LOGINS = get_mikbill_deleted();
+    $INFO_LOGINS = get_mikbill({ DELETED => 1 });
   }
   elsif ($argv->{FROM} eq 'mikbill_blocked') {
-    $INFO_LOGINS = get_mikbill_blocked();
+    $INFO_LOGINS = get_mikbill({ BLOCKED => 1 });
   }
+#  elsif ($argv->{FROM} eq 'mikbill_deleted') {
+#    $INFO_LOGINS = get_mikbill_deleted();
+#  }
+#  elsif ($argv->{FROM} eq 'mikbill_blocked') {
+#    $INFO_LOGINS = get_mikbill_blocked();
+#  }
   elsif ($argv->{FROM} eq 'nodeny') {
     $INFO_LOGINS = get_nodeny();
   }
@@ -1616,11 +1622,19 @@ sub parse_arguments {
 #  KEY `user` (`user`)
 
 #**********************************************************
-=head2 get_mikbill() -  Export from Mikbill
+=head2 get_mikbill($attr) -  Export from Mikbill
+
+  Arguments:
+    BLOCKED
+    DELETED
+
+  Results:
 
 =cut
 #**********************************************************
 sub get_mikbill {
+  my ($attr)=@_;
+
 
   my %fields = (
     'LOGIN'               => 'user',
@@ -1628,7 +1642,7 @@ sub get_mikbill {
     '1.EXPIRE'            => 'expired',
     '1.CREDIT'            => 'credit',
     '1.REGISTRATION'      => 'add_date',
-    '1.DISABLE'           => 'blocked',
+    '4.DISABLE'           => 'blocked',
     '3.ADDRESS_FLAT'      => 'app',
     '3.ADDRESS_STREET'    => 'address',
     '3.ADDRESS_BUILD'     => 'houseid',
@@ -1638,7 +1652,8 @@ sub get_mikbill {
     '3.FIO'               => 'fio',
     '5.PASPORT_GRANT'     => 'passportserie',
     '3.PHONE'             => 'phone',
-    '4.IP'                => 'framed_ip',
+    #'4.IP'                => 'framed_ip',
+    '4.IP'                => 'static_ip',
     '4.NETMASK'           => 'framed_mask',
     '4.TP_NUM'            => 'gid',
     '4.CID'               => 'local_mac',
@@ -1652,10 +1667,20 @@ sub get_mikbill {
     '3._MOB_TEL'          => 'mob_tel',
     '1.REDUCTION'         => 'reduction',
     '3.ENTRANCE'          => 'entrance',
-    '3.FLOOR'             => 'floor'
+    '3.FLOOR'             => 'floor',
+    '1.DELETED'           => 'deleted',
+    '1.DISABLE'           => 'disabled'
   );
 
   my %fields_rev = reverse(%fields);
+
+  my $user_table = 'users';
+  if($attr->{BLOCKED}) {
+    $user_table = 'usersblok';
+  }
+  elsif( $attr->{DELETED} ) {
+    $user_table = 'usersdel';
+  }
 
   my $sql = "SELECT
   u.user,
@@ -1664,7 +1689,7 @@ sub get_mikbill {
   u.expired,
   u.credit,
   u.add_date,
-  u.blocked,
+  IF(u.blocked>0, 4, 0) AS blocked,
   u.prim,
   u.numdogovor,
   u.email,
@@ -1673,24 +1698,26 @@ sub get_mikbill {
   u.phone,
   u.mob_tel,
   u.sms_tel,
-  u.framed_ip,
   u.framed_mask,
   u.gid,
   u.deposit,
   u.local_mac,
+  IF(u.real_ip=1, u.framed_ip, u.local_ip) AS static_ip,
   p.fixed_cost AS month_fee,
   p.packet AS tp_name,
   p.do_fixed_credit_summa AS user_credit_limit,
   u.fixed_cost AS reduction,
   IF(inetspeedlist.user_speed_in > 0, inetspeedlist.user_speed_in / 1024, '') AS speed,
   lanes_neighborhoods.neighborhoodname AS district,
-  IF(u.app<>u.app, u.app, '') AS app,
+  IF(u.app<>'', u.app, '') AS app,
   IF(addr.lane<>'', addr.lane, u.address) AS address,
   IF(h.house<>'', h.house, addr.house) AS houseid,
   addr.porches AS entrance,
-  addr.floors AS floor
+  addr.floors AS floor,
+  IF('$user_table'='usersdel', 1, 0) AS deleted,
+  IF('$user_table'='usersblok', 1, 0) AS disabled
 
-FROM users u
+FROM $user_table u
   LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
   LEFT JOIN lanes ON (h.laneid = lanes.laneid)
   LEFT JOIN lanes_neighborhoods ON (h.neighborhoodid = lanes_neighborhoods.neighborhoodid)
@@ -1744,214 +1771,241 @@ GROUP BY u.uid;
   return \%logins_hash;
 }
 
-#**********************************************************
-=head2 get_mikbill_deleted()
-
-=cut
-#**********************************************************
-sub get_mikbill_deleted {
-
-  my %fields = (
-    'LOGIN'            => 'user',
-    'PASSWORD'         => 'password',
-    '1.EXPIRE'         => 'expired',
-    '1.CREDIT'         => 'credit',
-    '1.REGISTRATION'   => 'add_date',
-    '1.DISABLE'        => 'blocked',
-    '3.ADDRESS_FLAT'   => 'app',
-    '3.ADDRESS_STREET' => 'address',
-    '3.ADDRESS_BUILD'  => 'houseid',
-    '3.COMMENTS'       => 'prim',
-    '3.CONTRACT_ID'    => 'numdogovor',
-    '3.EMAIL'          => 'email',
-    '3.FIO'            => 'fio',
-    '5.PASPORT_GRANT'  => 'passportserie',
-    '3.PHONE'          => 'phone',
-    '4.IP'             => 'framed_ip',
-    '4.NETMASK'        => 'framed_mask',
-    '4.TP_NUM'         => 'gid',
-    '5.SUM'            => 'deposit',
-    '3._DISTRICT'      => 'lanes_neighborhoods.neighborhoodname AS raion',
-    '3._CEL_PHONE'     => 'sms_tel',
-    '3._MOB_TEL'       => 'mob_tel',
-  );
-
-  my %fields_rev = reverse(%fields);
-  #my $fields_list = "user, " . join(", \n", values(%fields));
-
-  my $sql = "SELECT
-user,
-user,
-password,
-expired,
-credit,
-add_date,
-'1' as blocked,
-app,
-address,
-h.house as houseid,
-prim,
-numdogovor,
-email,
-fio,
-passportserie,
-phone,
-mob_tel,
-framed_ip,
-framed_mask,
-gid,
-deposit
-  FROM usersdel
-  LEFT JOIN lanes_houses h ON ( usersdel.houseid = h.houseid )";
-
-  #print $sql;
-  if ($DEBUG > 4) {
-    print $sql;
-    return 0;
-  }
-  elsif ($DEBUG > 0) {
-    print "$sql\n";
-  }
-  my DBI $q = $db->prepare($sql);
-  $q->execute();
-  my $query_fields = $q->{NAME};
-
-  #my $output = '';
-  my %logins_hash = ();
-
-  while (my @row = $q->fetchrow_array()) {
-    my $LOGIN = $row[0];
-
-    for (my $i = 1; $i <= $#row; $i++) {
-      if ($DEBUG > 3) {
-        print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
-      }
-
-      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
-    }
-
-    if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
-      $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
-    }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
-
-    #Extended params
-    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
-      $logins_hash{$LOGIN}{$k} = $v;
-    }
-
-  }
-
-  undef($q);
-  return \%logins_hash;
-}
-
-#**********************************************************
-=head2 get_mikbill_blocked() - GET bloked users from db mikbill
-
-=cut
-#**********************************************************
-sub get_mikbill_blocked {
-
-  my %fields = (
-    'LOGIN'            => 'user',
-    'PASSWORD'         => 'password',
-    '1.EXPIRE'         => 'expired',
-    '1.CREDIT'         => 'credit',
-    '1.REGISTRATION'   => 'add_date',
-    '4.STATUS'         => 'blocked',
-    '3.ADDRESS_FLAT'   => 'app',
-    '3.ADDRESS_STREET' => 'address',
-    '3.ADDRESS_BUILD'  => 'houseid',
-    '3.COMMENTS'       => 'prim',
-    '3.CONTRACT_ID'    => 'numdogovor',
-    '3.EMAIL'          => 'email',
-    '3.FIO'            => 'fio',
-    '5.PASPORT_GRANT'  => 'passportserie',
-    '3.PHONE'          => 'phone',
-    '4.IP'             => 'framed_ip',
-    '4.NETMASK'        => 'framed_mask',
-    '4.TP_NUM'         => 'gid',
-    '5.SUM'            => 'deposit',
-    '3._DISTRICT'      => 'lanes_neighborhoods.neighborhoodname AS ragion',
-    '3._CEL_PHONE'     => 'sms_tel',
-    '3._MOB_TEL'       => 'mob_tel',
-  );
-
-  my %fields_rev = reverse(%fields);
-  #my $fields_list = "user, " . join(", \n", values(%fields));
-
-  my $sql = "SELECT
-user,
-user,
-password,
-expired,
-credit,
-add_date,
-'1' as blocked,
-app,
-address,
-h.house as houseid,
-prim,
-numdogovor,
-email,
-fio,
-passportserie,
-phone,
-mob_tel,
-framed_ip,
-framed_mask,
-gid,
-deposit
-  FROM usersblok
-  LEFT JOIN lanes_houses h ON ( usersblok.houseid = h.houseid )";
-
-  #print $sql;
-  if ($DEBUG > 4) {
-    print $sql;
-    return 0;
-  }
-  elsif ($DEBUG > 0) {
-    print "$sql\n";
-  }
-
-  my DBI $q = $db->prepare($sql);
-  $q->execute();
-  my $query_fields = $q->{NAME};
-
-  #my $output = '';
-  my %logins_hash = ();
-
-  while (my @row = $q->fetchrow_array()) {
-    my $LOGIN = $row[0];
-
-    for (my $i = 1; $i <= $#row; $i++) {
-      if ($DEBUG > 3) {
-        print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
-      }
-
-      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
-    }
-
-    if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
-      $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
-    }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
-
-    #Extended params
-    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
-      $logins_hash{$LOGIN}{$k} = $v;
-    }
-
-  }
-
-  undef($q);
-  return \%logins_hash;
-}
+##**********************************************************
+#=head2 get_mikbill_deleted()
+#
+#=cut
+##**********************************************************
+#sub get_mikbill_deleted {
+#
+#  my %fields = (
+#    'LOGIN'               => 'user',
+#    'PASSWORD'            => 'password',
+#    '1.EXPIRE'            => 'expired',
+#    '1.CREDIT'            => 'credit',
+#    '1.REGISTRATION'      => 'add_date',
+#    '4.DISABLE'           => 'blocked',
+#    '3.ADDRESS_FLAT'      => 'app',
+#    '3.ADDRESS_STREET'    => 'address',
+#    '3.ADDRESS_BUILD'     => 'houseid',
+#    '3.COMMENTS'          => 'prim',
+#    '3.CONTRACT_ID'       => 'numdogovor',
+#    '3.EMAIL'             => 'email',
+#    '3.FIO'               => 'fio',
+#    '5.PASPORT_GRANT'     => 'passportserie',
+#    '3.PHONE'             => 'phone',
+#    #'4.IP'                => 'framed_ip',
+#    '4.IP'                => 'static_ip',
+#    '4.NETMASK'           => 'framed_mask',
+#    '4.TP_NUM'            => 'gid',
+#    '4.CID'               => 'local_mac',
+#    '4.TP_NAME'           => 'tp_name',
+#    '4.MONTH_FEE'         => 'month_fee',
+#    '4.USER_CREDIT_LIMIT' => 'user_credit_limit',
+#    '4.SPEED'             => 'speed',
+#    '5.SUM'               => 'deposit',
+#    '3._DISTRICT'         => 'district',
+#    '3._CEL_PHONE'        => 'sms_tel',
+#    '3._MOB_TEL'          => 'mob_tel',
+#    '1.REDUCTION'         => 'reduction',
+#    '3.ENTRANCE'          => 'entrance',
+#    '3.FLOOR'             => 'floor'
+#  );
+#
+#  my %fields_rev = reverse(%fields);
+#  #my $fields_list = "user, " . join(", \n", values(%fields));
+#
+#  my $sql = "SELECT
+#  u.user,
+#  u.user,
+#  u.password,
+#  u.expired,
+#  u.credit,
+#  u.add_date,
+#  if(u.blocked>0, 4, 0) AS blocked,
+#  u.prim,
+#  u.numdogovor,
+#  u.email,
+#  u.fio,
+#  u.passportserie,
+#  u.phone,
+#  u.mob_tel,
+#  u.sms_tel,
+#  u.framed_mask,
+#  u.gid,
+#  u.deposit,
+#  u.local_mac,
+#  IF(u.real_ip=1, u.framed_ip, u.local_ip) AS static_ip,
+#  p.fixed_cost AS month_fee,
+#  p.packet AS tp_name,
+#  p.do_fixed_credit_summa AS user_credit_limit,
+#  u.fixed_cost AS reduction,
+#  IF(inetspeedlist.user_speed_in > 0, inetspeedlist.user_speed_in / 1024, '') AS speed,
+#  lanes_neighborhoods.neighborhoodname AS district,
+#  IF(u.app<>'', u.app, '') AS app,
+#  IF(addr.lane<>'', addr.lane, u.address) AS address,
+#  IF(h.house<>'', h.house, addr.house) AS houseid,
+#  addr.porches AS entrance,
+#  addr.floors AS floor
+#
+#FROM usersdel u
+#  LEFT JOIN lanes_houses h ON ( u.houseid = h.houseid )
+#  LEFT JOIN lanes ON (h.laneid = lanes.laneid)
+#  LEFT JOIN lanes_neighborhoods ON (h.neighborhoodid = lanes_neighborhoods.neighborhoodid)
+#  LEFT JOIN packets p ON (u.gid = p.gid)
+#  LEFT JOIN inetspeedlist ON (u.user=inetspeedlist.username)
+#  LEFT JOIN usersadress addr ON (addr.user=u.user)
+#
+#GROUP BY u.uid;";
+#
+#  #print $sql;
+#  if ($DEBUG > 4) {
+#    print $sql;
+#    return 0;
+#  }
+#  elsif ($DEBUG > 0) {
+#    print "$sql\n";
+#  }
+#  my DBI $q = $db->prepare($sql);
+#  $q->execute();
+#  my $query_fields = $q->{NAME};
+#
+#  #my $output = '';
+#  my %logins_hash = ();
+#
+#  while (my @row = $q->fetchrow_array()) {
+#    my $LOGIN = $row[0];
+#
+#    for (my $i = 1; $i <= $#row; $i++) {
+#      if ($DEBUG > 3) {
+#        print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
+#      }
+#
+#      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
+#    }
+#
+#    if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
+#      $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
+#    }
+#    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+#      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+#    }
+#
+#    #Extended params
+#    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
+#      $logins_hash{$LOGIN}{$k} = $v;
+#    }
+#
+#  }
+#
+#  undef($q);
+#  return \%logins_hash;
+#}
+#
+##**********************************************************
+#=head2 get_mikbill_blocked() - GET bloked users from db mikbill
+#
+#=cut
+##**********************************************************
+#sub get_mikbill_blocked {
+#
+#  my %fields = (
+#    'LOGIN'            => 'user',
+#    'PASSWORD'         => 'password',
+#    '1.EXPIRE'         => 'expired',
+#    '1.CREDIT'         => 'credit',
+#    '1.REGISTRATION'   => 'add_date',
+#    '1.DISABLE'        => 'blocked',
+#    '3.ADDRESS_FLAT'   => 'app',
+#    '3.ADDRESS_STREET' => 'address',
+#    '3.ADDRESS_BUILD'  => 'houseid',
+#    '3.COMMENTS'       => 'prim',
+#    '3.CONTRACT_ID'    => 'numdogovor',
+#    '3.EMAIL'          => 'email',
+#    '3.FIO'            => 'fio',
+#    '5.PASPORT_GRANT'  => 'passportserie',
+#    '3.PHONE'          => 'phone',
+#    '4.IP'             => 'framed_ip',
+#    '4.NETMASK'        => 'framed_mask',
+#    '4.TP_NUM'         => 'gid',
+#    '5.SUM'            => 'deposit',
+#    '3._DISTRICT'      => 'lanes_neighborhoods.neighborhoodname AS ragion',
+#    '3._CEL_PHONE'     => 'sms_tel',
+#    '3._MOB_TEL'       => 'mob_tel',
+#  );
+#
+#  my %fields_rev = reverse(%fields);
+#  #my $fields_list = "user, " . join(", \n", values(%fields));
+#
+#  my $sql = "SELECT
+#user,
+#user,
+#password,
+#expired,
+#credit,
+#add_date,
+#'1' as blocked,
+#app,
+#address,
+#h.house as houseid,
+#prim,
+#numdogovor,
+#email,
+#fio,
+#passportserie,
+#phone,
+#mob_tel,
+#framed_ip,
+#framed_mask,
+#gid,
+#deposit
+#  FROM usersblok
+#  LEFT JOIN lanes_houses h ON ( usersblok.houseid = h.houseid )";
+#
+#  #print $sql;
+#  if ($DEBUG > 4) {
+#    print $sql;
+#    return 0;
+#  }
+#  elsif ($DEBUG > 0) {
+#    print "$sql\n";
+#  }
+#
+#  my DBI $q = $db->prepare($sql);
+#  $q->execute();
+#  my $query_fields = $q->{NAME};
+#
+#  #my $output = '';
+#  my %logins_hash = ();
+#
+#  while (my @row = $q->fetchrow_array()) {
+#    my $LOGIN = $row[0];
+#
+#    for (my $i = 1; $i <= $#row; $i++) {
+#      if ($DEBUG > 3) {
+#        print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
+#      }
+#
+#      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
+#    }
+#
+#    if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
+#      $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
+#    }
+#    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+#      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+#    }
+#
+#    #Extended params
+#    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
+#      $logins_hash{$LOGIN}{$k} = $v;
+#    }
+#
+#  }
+#
+#  undef($q);
+#  return \%logins_hash;
+#}
 
 #**********************************************************
 =head2 mikbill_pools() Export from Nodeny
