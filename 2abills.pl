@@ -25,8 +25,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.79
-  UPDATE: 20180607
+  VERSION: 0.81
+  UPDATE: 20180612
 
 =cut
 
@@ -36,7 +36,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.79;
+my $VERSION = 0.81;
 
 our (%conf);
 
@@ -84,6 +84,9 @@ if ($argv->{FROM}) {
   if ($argv->{FROM} eq 'stargazer_pg') {
     $dbtype = 'Pg';
   }
+  elsif ($argv->{FROM} eq 'nika') {
+    get_nika();
+  }
   elsif ($argv->{FROM} eq 'odbc' || $argv->{FROM} eq 'carbon4') {
     $dbtype = 'ODBC';
     my $db_dsn = 'MSSQL';
@@ -112,7 +115,7 @@ if ($argv->{FROM}) {
 }
 
 if ($argv->{DB_CHARSET}) {
-  $db->do("set names $argv->{DB_CHARSET}");
+  $db->do("SET NAMES $argv->{DB_CHARSET}");
 }
 
 #Tarif migration section
@@ -129,29 +132,30 @@ if ($argv->{TP_MIGRATION}) {
 my $INFO_LOGINS;
 
 if ($argv->{FROM}) {
-  if ($argv->{FROM} eq 'freenibs') {
+  my $from = $argv->{FROM};
+  if ($from eq 'freenibs') {
     $INFO_LOGINS = get_freenibs_users();
   }
-  elsif ($argv->{FROM} eq 'mabill') {
+  elsif ($from eq 'mabill') {
     $INFO_LOGINS = get_freenibs_users({ MABILL => 1 });
   }
-  elsif ($argv->{FROM} eq 'utm4') {
+  elsif ($from eq 'utm4') {
     $INFO_LOGINS = get_utm4_users();
   }
-  elsif ($argv->{FROM} eq 'utm5') {
+  elsif ($from eq 'utm5') {
     $INFO_LOGINS = get_utm5_users();
   }
-  elsif ($argv->{FROM} eq 'utm5cards') {
+  elsif ($from eq 'utm5cards') {
     utm5cards();
     exit;
   }
-  elsif ($argv->{FROM} eq 'utm5pg') {
+  elsif ($from eq 'utm5pg') {
     $INFO_LOGINS = get_utm5pg_users();
   }
-  elsif ($argv->{FROM} eq 'unisys') {
+  elsif ($from eq 'unisys') {
     $INFO_LOGINS = get_unisys();
   }
-  elsif ($argv->{FROM} eq 'file') {
+  elsif ($from eq 'file') {
     if ($SYNC_DEPOSIT) {
       $FILE_FIELDS = 'LOGIN,NEW_SUM';
       $IMPORT_FILE = $SYNC_DEPOSIT;
@@ -163,52 +167,55 @@ if ($argv->{FROM}) {
       $INFO_LOGINS = get_file();
     }
   }
-  elsif ($argv->{FROM} eq 'abills') {
+  elsif ($from eq 'abills') {
     $INFO_LOGINS = get_abills();
   }
-  elsif ($argv->{FROM} eq 'mikbill') {
+  elsif ($from eq 'mikbill') {
     $INFO_LOGINS = get_mikbill({  });
   }
-  elsif ($argv->{FROM} eq 'mikbill_deleted') {
+  elsif ($from eq 'mikbill_deleted') {
     $INFO_LOGINS = get_mikbill({ DELETED => 1 });
   }
-  elsif ($argv->{FROM} eq 'mikbill_blocked') {
+  elsif ($from eq 'mikbill_blocked') {
     $INFO_LOGINS = get_mikbill({ BLOCKED => 1 });
   }
-#  elsif ($argv->{FROM} eq 'mikbill_deleted') {
+  elsif ($from eq 'mikbill_freeze') {
+    $INFO_LOGINS = get_mikbill({ FREEZE => 1 });
+  }
+#  elsif ($from eq 'mikbill_deleted') {
 #    $INFO_LOGINS = get_mikbill_deleted();
 #  }
-#  elsif ($argv->{FROM} eq 'mikbill_blocked') {
+#  elsif ($from eq 'mikbill_blocked') {
 #    $INFO_LOGINS = get_mikbill_blocked();
 #  }
-  elsif ($argv->{FROM} eq 'nodeny') {
+  elsif ($from eq 'nodeny') {
     $INFO_LOGINS = get_nodeny();
   }
-  elsif ($argv->{FROM} eq 'traffpro') {
+  elsif ($from eq 'traffpro') {
     $INFO_LOGINS = get_traffpro();
   }
-  elsif ($argv->{FROM} eq 'stargazer') {
+  elsif ($from eq 'stargazer') {
     $INFO_LOGINS = get_stargazer();
   }
-  elsif ($argv->{FROM} eq 'stargazer_pg') {
+  elsif ($from eq 'stargazer_pg') {
     $INFO_LOGINS = get_stargazer_pg();
   }
-  elsif ($argv->{FROM} eq 'easyhotspot') {
+  elsif ($from eq 'easyhotspot') {
     $INFO_LOGINS = get_easyhotspot();
   }
-  elsif ($argv->{FROM} eq 'bbilling') {
+  elsif ($from eq 'bbilling') {
     $INFO_LOGINS = get_bbilling();
   }
-  elsif ($argv->{FROM} eq 'lms') {
+  elsif ($from eq 'lms') {
     $INFO_LOGINS = get_lms();
   }
-  elsif ($argv->{FROM} eq 'lms_nodes') {
+  elsif ($from eq 'lms_nodes') {
     $INFO_LOGINS = get_lms_nodes();
   }
-  elsif ($argv->{FROM} eq 'odbc') {
+  elsif ($from eq 'odbc') {
     $INFO_LOGINS = get_odbc();
   }
-  elsif ($argv->{FROM} eq 'carbon4') {
+  elsif ($from eq 'carbon4') {
     $INFO_LOGINS = get_carbon4();
   }
 
@@ -1259,6 +1266,12 @@ sub show {
   );
 
   my @titls = sort keys %$logins_info;
+
+  if($#titls == -1) {
+    print "Error: No input data\n";
+    return 0;
+  }
+
   my $login = $titls[0];
 
   @titls = sort keys %{$logins_info->{$login}};
@@ -1540,6 +1553,7 @@ ABillS Migration system Version: $VERSION
                             lms
                             lms_nodes (IP, MAC adresses for lms users)
                             odbc
+                            nika
     SYNC_DEPOSIT        -  filename to sync deposit ( ./2abills.pl FROM=file SYNC_DEPOSIT=/usr/deposits )
     IMPORT_FILE=[file]  - Tab delimiter file
     FILE_FIELDS=[list,.]- Tab delimiter fields position (FILE_FIELDS=LOGIN,PASSWORD,3.FIO...)
@@ -1561,15 +1575,16 @@ ABillS Migration system Version: $VERSION
 }
 
 #*******************************************************************
-# Parse comand line arguments
-# parse_arguments(@$argv)
+=head2 parse_arguments(@$argv) - Parse comand line arguments
+
+=cut
 #*******************************************************************
 sub parse_arguments {
-  my ($argv) = @_;
+  my ($argv_) = @_;
 
   my %args = ();
 
-  foreach my $line (@$argv) {
+  foreach my $line (@$argv_) {
     if ($line =~ /=/) {
       my ($k, $v) = split(/=/, $line, 2);
       $args{"$k"} = (defined($v)) ? $v : '';
@@ -1635,7 +1650,6 @@ sub parse_arguments {
 sub get_mikbill {
   my ($attr)=@_;
 
-
   my %fields = (
     'LOGIN'               => 'user',
     'PASSWORD'            => 'password',
@@ -1681,6 +1695,9 @@ sub get_mikbill {
   elsif( $attr->{DELETED} ) {
     $user_table = 'usersdel';
   }
+  elsif( $attr->{FREEZE} ) {
+    $user_table = 'usersfreeze';
+  }
 
   my $sql = "SELECT
   u.user,
@@ -1689,7 +1706,7 @@ sub get_mikbill {
   u.expired,
   u.credit,
   u.add_date,
-  IF(u.blocked>0, 4, 0) AS blocked,
+  IF(u.blocked>0, 4, IF('$attr->{FREEZE}'<>'', 3, 0)) AS blocked,
   u.prim,
   u.numdogovor,
   u.email,
@@ -1756,8 +1773,9 @@ GROUP BY u.uid;
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+
+    if ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/[\r\n]+/ /g;
     }
 
     #Extended params
@@ -2981,7 +2999,6 @@ sub get_carbon4 {
 }
 
 #**********************************************************
-
 =head2 sync_deposit($update_list) - Syncing deposits from file
 
   Arguments:
@@ -2992,7 +3009,6 @@ sub get_carbon4 {
     }
 
 =cut
-
 #**********************************************************
 sub sync_deposit {
   my ($update_list) = @_;
@@ -3009,6 +3025,115 @@ sub sync_deposit {
 
     print 'Changed ' . $login . ' deposit to ' . $new_sum . "\n";
   }
+
+  return 1;
+}
+
+
+#**********************************************************
+=head2 get_nika($update_list) - Get user information from nika
+
+  Arguments:
+
+=cut
+#**********************************************************
+sub get_nika {
+
+  print "Nika stystem SQL examples\n";
+
+  my $sql = qq{
+TRUNCATE TABLE abills.groups;
+TRUNCATE TABLE abills.users_contacts;
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE abills.users;
+TRUNCATE TABLE abills.bills;
+TRUNCATE TABLE abills.docs_invoice2payments;
+TRUNCATE TABLE abills.payments;
+TRUNCATE TABLE abills.fees;
+TRUNCATE TABLE abills.docs_invoice_orders;
+TRUNCATE TABLE abills.docs_invoices;
+TRUNCATE TABLE abills.docs_receipt_orders;
+TRUNCATE TABLE abills.docs_receipts;
+TRUNCATE TABLE abills.maps_points;
+TRUNCATE TABLE abills.builds;
+TRUNCATE TABLE abills.admin_actions;
+TRUNCATE TABLE abills.admin_system_actions;
+SET FOREIGN_KEY_CHECKS = 1;
+TRUNCATE TABLE abills.internet_main;
+TRUNCATE TABLE abills.districts;
+TRUNCATE TABLE abills.streets;
+TRUNCATE TABLE abills.users_pi;
+TRUNCATE TABLE abills.abon_tariffs;
+TRUNCATE TABLE abills.abon_user_list;
+
+SET SQL_MODE=NO_ENGINE_SUBSTITUTION;
+
+#GROUPS
+INSERT INTO abills.groups (gid, name, descr)   SELECT     id,     name,     comment   FROM     nika_system.groups;
+#Users
+INSERT INTO abills.users (uid, id,gid, disable, bill_id, registration, password)
+  SELECT id, login, groups, IF(killed = 'killed', IF(state = 3, 0, 1), 0), id, datetime, ENCODE(password, 'test12345678901234567890') FROM nika_system.abon;
+
+#Bills
+INSERT INTO abills.bills(id,uid,deposit,registration) SELECT id, id, depozit, datetime FROM nika_system.abon;
+
+INSERT INTO abills.payments( date, sum, ip, uid, aid, inner_describe ) SELECT NOW(), depozit, INET_ATON('127.0.0.1'),id,2,'Migration' FROM nika_system.abon;
+
+#Internet
+INSERT INTO abills.internet_main (uid, ip, cid, port) SELECT user, INET_ATON(ip), mac, port FROM nika_system.comp;
+
+UPDATE abills.internet_main i
+
+  CROSS JOIN
+  ( SELECT if(tp.tp_id IS NULL, 111, tp.tp_id) as insert_tp_id, a.id AS nika_uid
+    FROM abills.tarif_plans tp
+      LEFT JOIN nika_system.abon a ON (a.tarif=tp.id)
+  ) AS m
+SET i.tp_id=m.insert_tp_id
+WHERE i.uid=m.nika_uid;
+
+INSERT INTO abills.internet_main (uid, ip, cid, tp_id, comments) SELECT 2, INET_ATON(ip), mac, 1, CONCAT(name_m, '', type) FROM nika_system.modem WHERE ip LIKE '172.17.%';
+
+INSERT INTO abills.abon_tariffs (id, name, period, price)   SELECT id, name,  IF(dayORmonth='day', 0, 1), IF(dayORmonth='day', cost_day, cost) FROM nika_system.new_tarif WHERE id IN (183, 182, 165, 164, 163, 157, 156, 155, 154);
+
+#Address
+INSERT INTO abills.users_pi (uid, fio, fio2, fio3, email, comments, pasport_grant, pasport_num, address_flat, contract_id) SELECT id, first_name, second_name, third_name, email, comment, pass_data, pass, apartment, id FROM nika_system.abon;
+UPDATE abills.users_pi SET address_street = (SELECT nika_system.streets.street
+                                              FROM nika_system.streets
+                                              LEFT JOIN nika_system.abon ON (nika_system.abon.street=nika_system.streets.id)
+                                              WHERE (nika_system.abon.id=abills.users_pi.uid));
+
+UPDATE abills.users_pi SET address_flat = (SELECT apartment FROM nika_system.abon WHERE (nika_system.abon.id=abills.users_pi.uid));
+UPDATE abills.users_pi SET address_build = (SELECT house FROM nika_system.abon WHERE (nika_system.abon.id=abills.users_pi.uid));
+
+INSERT  INTO abills.districts (`name`, `comments`) VALUES ('Main District', '');
+REPLACE INTO abills.streets (name, district_id) SELECT address_street, 1 FROM abills.users_pi group by 1;
+REPLACE INTO abills.builds (street_id, number) select s.id, address_build from abills.users_pi u, abills.streets s   WHERE u.address_street=s.name GROUP BY address_street, address_build;
+
+UPDATE abills.users_pi SET _actual_mob = (SELECT actual
+                   FROM nika_system.abon
+                   WHERE (nika_system.abon.id = abills.users_pi.uid));
+
+UPDATE abills.users_pi SET _actual_mob = (SELECT actual FROM nika_system.abon WHERE (nika_system.abon.id = abills.users_pi.uid));
+
+INSERT INTO abills.users_contacts (uid, type_id, value) SELECT id, 2, phone FROM nika_system.abon  WHERE phone<>'';
+INSERT INTO abills.users_contacts (uid, type_id, value) SELECT id, 1, mobile FROM nika_system.abon WHERE mobile<>'';
+
+UPDATE abills.users_pi pi
+  LEFT JOIN abills.streets s ON (s.name=pi.address_street)
+  LEFT JOIN abills.builds b ON (s.id=b.street_id AND b.number=pi.address_build)
+SET pi.location_id=b.id   WHERE pi.location_id=0;
+
+
+UPDATE _connection_type_list SET id=12 WHERE id=11;
+UPDATE abills.users_pi SET _connection_type = (SELECT category FROM nika_system.abon WHERE (nika_system.abon.id = abills.users_pi.uid));
+
+
+INSERT INTO abills.fees (uid, bill_id, dsc, date, sum, last_deposit)  SELECT s.user, s.user, s.tarif, s.date_start, s.summa, s.summa FROM stat_serv_new s;
+
+  };
+
+  print $sql;
 
   return 1;
 }
