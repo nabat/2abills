@@ -20,13 +20,15 @@ use warnings;
    Unisys
    BBilling
    Carbonsoft 4
+   NIkasyatem
+
 
    2abills.pl former abills migration file for Cards module account creation
 
 =head1 VERSION
 
-  VERSION: 0.81
-  UPDATE: 20180612
+  VERSION: 0.82
+  UPDATE: 20180812
 
 =cut
 
@@ -36,16 +38,11 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.81;
+my $VERSION = 0.82;
 
 our (%conf);
 
 #DB information
-my $dbhost = $argv->{DB_HOST} || "127.0.0.1";
-my $dbname = $argv->{DB_NAME} || "abills";
-my $dbuser = $argv->{DB_USER} || "root";
-my $dbpasswd = $argv->{DB_PASSWORD} || "";
-my $dbtype = $argv->{DB_TYPE} || "mysql"; #Pg
 my $encryption_key = $argv->{PASSSWD_ENCRYPTION_KEY};
 
 if (defined($argv->{'help'}) || $#ARGV < 0) {
@@ -66,7 +63,7 @@ my $SYNC_DEPOSIT = $argv->{SYNC_DEPOSIT} || 0;
 my %EXTENDED_STATIC_FIELDS = ();
 my $debug = $argv->{DEBUG} || 0;
 
-  while (my ($k, $v) = each(%$argv)) {
+while (my ($k, $v) = each(%$argv)) {
   if ($k =~ /^(\d)\./) {
     $EXTENDED_STATIC_FIELDS{$k} = $v;
     print "Extended: $k -> $v\n" if ($DEBUG > 1);
@@ -80,42 +77,20 @@ if ($argv->{ADD_NAS}) {
   exit;
 }
 
-if ($argv->{FROM}) {
-  if ($argv->{FROM} eq 'stargazer_pg') {
-    $dbtype = 'Pg';
+my $from = $argv->{FROM} || q{};
+
+if ($from) {
+  if ($from eq 'stargazer_pg') {
+    $argv->{DB_TYPE} = 'Pg';
   }
-  elsif ($argv->{FROM} eq 'nika') {
+  elsif ($from eq 'nika') {
     get_nika();
   }
-  elsif ($argv->{FROM} eq 'odbc' || $argv->{FROM} eq 'carbon4') {
-    $dbtype = 'ODBC';
-    my $db_dsn = 'MSSQL';
-
-    eval {require DBD::ODBC;};
-    if ($@) {
-      print "Please install 'DBD::ODBC'\n";
-      print "Manual: http://abills.net.ua/wiki/doku.php/abills:docs:manual:soft:perl_odbc \n";
-      exit;
-    }
-    DBD::ODBC->import();
-
-    if ($argv->{FROM} eq 'carbon4') {
-      $db = get_connection_to_firebird_host($dbhost, '/var/db/ics_main.gdb', $dbpasswd);
-    }
-    else {
-      $db = DBI->connect("dbi:ODBC:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
-        or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
-    }
-
+  elsif ($from eq 'ODBC') {
+    $argv->{DB_TYPE} = 'ODBC';
   }
-  else {
-    $db = DBI->connect("dbi:$dbtype:dbname=$dbname;host=$dbhost", "$dbuser", "$dbpasswd")
-      || die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
-  }
-}
 
-if ($argv->{DB_CHARSET}) {
-  $db->do("SET NAMES $argv->{DB_CHARSET}");
+  $db = db_connect({ %$argv });
 }
 
 #Tarif migration section
@@ -131,8 +106,7 @@ if ($argv->{TP_MIGRATION}) {
 
 my $INFO_LOGINS;
 
-if ($argv->{FROM}) {
-  my $from = $argv->{FROM};
+if ($from) {
   if ($from eq 'freenibs') {
     $INFO_LOGINS = get_freenibs_users();
   }
@@ -171,7 +145,7 @@ if ($argv->{FROM}) {
     $INFO_LOGINS = get_abills();
   }
   elsif ($from eq 'mikbill') {
-    $INFO_LOGINS = get_mikbill({  });
+    $INFO_LOGINS = get_mikbill({});
   }
   elsif ($from eq 'mikbill_deleted') {
     $INFO_LOGINS = get_mikbill({ DELETED => 1 });
@@ -182,12 +156,15 @@ if ($argv->{FROM}) {
   elsif ($from eq 'mikbill_freeze') {
     $INFO_LOGINS = get_mikbill({ FREEZE => 1 });
   }
-#  elsif ($from eq 'mikbill_deleted') {
-#    $INFO_LOGINS = get_mikbill_deleted();
-#  }
-#  elsif ($from eq 'mikbill_blocked') {
-#    $INFO_LOGINS = get_mikbill_blocked();
-#  }
+  elsif($from eq 'mikbill_payments') {
+    mikbill_payments();
+  }
+  #  elsif ($from eq 'mikbill_deleted') {
+  #    $INFO_LOGINS = get_mikbill_deleted();
+  #  }
+  #  elsif ($from eq 'mikbill_blocked') {
+  #    $INFO_LOGINS = get_mikbill_blocked();
+  #  }
   elsif ($from eq 'nodeny') {
     $INFO_LOGINS = get_nodeny();
   }
@@ -224,7 +201,97 @@ if ($argv->{FROM}) {
 
 if ($db) {
   $db->disconnect();
-  $db = undef;
+}
+
+#**************************************************
+=head2 db_connect($attr)
+
+  Arguments:
+    $attr
+      DB_TYPE
+      DB_NAME
+      DB_USER
+      DB_PASSWORD
+      ABILLS_DB
+
+  Returns:
+    $db
+
+=cut
+#**************************************************
+sub db_connect {
+  my ($attr) = @_;
+
+  my DBI $_db;
+
+  my $dbhost = $attr->{DB_HOST} || "127.0.0.1";
+  my $dbname = $attr->{DB_NAME} || "abills";
+  my $dbuser = $attr->{DB_USER} || "root";
+  my $dbpasswd = $attr->{DB_PASSWORD} || "";
+  my $dbtype = $attr->{DB_TYPE} || "mysql"; #Pg
+
+  if ($attr->{ABILLS_DB}) {
+    if (!-f '/usr/abills/libexec/config.pl') {
+      print "Can't find /usr/abills/libexec/config.pl
+
+ABillS not installed\n";
+
+      exit;
+    }
+
+    do "/usr/abills/libexec/config.pl";
+
+    $dbtype = $conf{dbtype};
+    $dbhost = $conf{dbhost};
+    $dbname = $conf{dbname};
+    $dbuser = $conf{dbuser};
+    $dbpasswd = $conf{dbpasswd};
+  }
+  elsif ($dbtype eq 'ODBC') {
+    my $db_dsn = 'MSSQL';
+
+    eval {require DBD::ODBC;};
+    if ($@) {
+      print "Please install 'DBD::ODBC'\n";
+      print "Manual: http://abills.net.ua/wiki/doku.php/abills:docs:manual:soft:perl_odbc \n";
+      exit;
+    }
+    DBD::ODBC->import();
+
+    if ($from eq 'carbon4') {
+      $_db = get_connection_to_firebird_host($dbhost, '/var/db/ics_main.gdb', $dbpasswd);
+    }
+    else {
+      $_db = DBI->connect("dbi:$dbtype:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
+        or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n"
+        . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd
+        . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
+    }
+
+    return $_db;
+  }
+
+  if ($DEBUG > 3) {
+    print "DB info:
+     dbtype: $dbtype
+     dbhost: $dbhost
+     dbname: $dbname
+     dbuser: $dbuser
+     dbpasswd: $dbpasswd
+    ";
+  }
+
+  $_db = DBI->connect("dbi:$dbtype:dbname=$dbname;host=$dbhost", "$dbuser", "$dbpasswd")
+    || die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n"
+    . "password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser
+    . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n"
+    . $DBI::err . "\n" . $DBI::rows;
+
+  if ($argv->{DB_CHARSET}) {
+    $_db->do("SET NAMES $argv->{DB_CHARSET}");
+  }
+
+  return $_db;
 }
 
 #**************************************************
@@ -275,10 +342,6 @@ sub add_nas {
     push @add_arr_hash, \%val_hash;
   }
 
-  do "/usr/abills/libexec/config.pl";
-
-  unshift(@INC, $Bin . '/../', $Bin . '/../Abills', $Bin . "/../Abills/$conf{dbtype}");
-
   require Abills::SQL;
   Abills::SQL->import();
 
@@ -291,6 +354,10 @@ sub add_nas {
   require Dhcphosts;
   Dhcphosts->import();
 
+  do "/usr/abills/libexec/config.pl";
+
+  unshift(@INC, $Bin . '/../', $Bin . '/../Abills', $Bin . "/../Abills/$conf{dbtype}");
+
   if ($DEBUG > 3) {
     print "DB info:
      dbtype: $conf{dbtype}
@@ -301,7 +368,8 @@ sub add_nas {
     ";
   }
 
-  my $abills_db = Abills::SQL->connect($conf{dbtype}, $conf{dbhost}, $conf{dbname}, $conf{dbuser}, $conf{dbpasswd}, { CHARSET => ($conf{dbcharset}) ? $conf{dbcharset} : undef });
+  my $abills_db = Abills::SQL->connect($conf{dbtype}, $conf{dbhost}, $conf{dbname}, $conf{dbuser},
+    $conf{dbpasswd}, { CHARSET => ($conf{dbcharset}) ? $conf{dbcharset} : undef });
 
   my $admin = Admins->new($abills_db, \%conf);
   $admin->info($conf{SYSTEM_ADMIN_ID}, { IP => '127.0.0.1' });
@@ -399,11 +467,9 @@ sub file_content {
 }
 
 #**********************************************************
-
 =head2 get_connection_to_firebird_host($server, $db_name, $password) - connect to remote Firebird DB
 
 =cut
-
 #**********************************************************
 sub get_connection_to_firebird_host {
   my ($server, $db_name, $password) = @_;
@@ -1267,7 +1333,7 @@ sub show {
 
   my @titls = sort keys %$logins_info;
 
-  if($#titls == -1) {
+  if ($#titls == -1) {
     print "Error: No input data\n";
     return 0;
   }
@@ -1300,7 +1366,6 @@ sub show {
 
     next if (!$login_);
     print "$login_\n" if ($DEBUG > 0);
-
 
     if ($FORMAT eq 'html') {
       $output .= "<tr><td>$logins_info->{$login_}{'LOGIN'}</td><td>$logins_info->{$login_}{'PASSWORD'}</td>";
@@ -1648,7 +1713,7 @@ sub parse_arguments {
 =cut
 #**********************************************************
 sub get_mikbill {
-  my ($attr)=@_;
+  my ($attr) = @_;
 
   my %fields = (
     'LOGIN'               => 'user',
@@ -1689,13 +1754,13 @@ sub get_mikbill {
   my %fields_rev = reverse(%fields);
 
   my $user_table = 'users';
-  if($attr->{BLOCKED}) {
+  if ($attr->{BLOCKED}) {
     $user_table = 'usersblok';
   }
-  elsif( $attr->{DELETED} ) {
+  elsif ($attr->{DELETED}) {
     $user_table = 'usersdel';
   }
-  elsif( $attr->{FREEZE} ) {
+  elsif ($attr->{FREEZE}) {
     $user_table = 'usersfreeze';
   }
 
@@ -2033,12 +2098,12 @@ GROUP BY u.uid;
 #**********************************************************
 sub mikbill_pools {
 
-  my $sql =  "INSERT INTO abills.ippools (name, netmask, ip, dns, gateway, vlan, comments, static, counts)
+  my $sql = "INSERT INTO abills.ippools (name, netmask, ip, dns, gateway, vlan, comments, static, counts)
   SELECT sector, INET_ATON(mask), INET_ATON(subnet), dns_serv, INET_ATON(routers), vlanid,
     CONCAT(iface, '/', sectorid), 1, 253
    FROM sectors;";
 
-  if($debug > 3) {
+  if ($debug > 3) {
     print $sql;
   }
 
@@ -2046,18 +2111,82 @@ sub mikbill_pools {
 }
 
 #**********************************************************
-=head2 mikbill_payments() Export from Nodeny
-
+=head2 mikbill_payments() - Export from mikbill payments
 
 =cut
 #**********************************************************
 sub mikbill_payments {
 
-  #my $sql =  "select sectorid,sector,iface,mask,subnet,dns_serv,routers,dns_serv2,vlanid from sectors;";
+  if($debug > 1) {
+    print "Plugin: mikbill_payments \n";
+  }
+
+  # GEt abills logins
+  my $login2uid = login2uid();
+
+  my DBI $db_abills = db_connect({ ABILLS_DB => 1 });
+  my $sql = qq{
+  SELECT
+users.user AS login,
+bugh_plategi_stat.date AS date,
+bugh_plategi_type.deposit_action AS action,
+bugh_plategi_stat.summa AS sum,
+bugh_plategi_type.typename AS type,
+bugh_plategi_stat.plategid AS id
+FROM bugh_plategi_stat, bugh_plategi_type, users
+WHERE
+bugh_plategi_type.bughtypeid = bugh_plategi_stat.bughtypeid
+AND users.uid = bugh_plategi_stat.uid
+AND bugh_plategi_type.bughtypeid NOT in (1,2,9,20,21,22)
+AND summa NOT in (0)
+ORDER BY date;
+  };
+
+  my DBI $q = $db->prepare($sql);
+  $q->execute();
+  while (my $row = $q->fetchrow_hashref()) {
+    my $uid     = $login2uid->{$row->{login}}{UID} || 0;
+    my $bill_id = $login2uid->{$row->{login}}{BILL_ID} || 0;
+
+    if($debug > 1) {
+      print "LOGIN: $row->{login} UID: $uid BILL_ID: $bill_id SUM: $row->{sum} DATE: $row->{date}\n";
+    }
+
+    my $insert_query = "INSERT INTO payments (uid, bill_id, sum, date, ext_id)
+     VALUES ($uid, $bill_id, '$row->{sum}', '$row->{date}', 'migrate: $row->{id}');";
+
+    if($debug > 1) {
+      print "$insert_query\n";
+    }
+    $db_abills->do($insert_query);
+  }
 
   return 1;
 }
 
+
+#**********************************************************
+=head2 login2uid() - login to uid
+
+=cut
+#**********************************************************
+sub login2uid {
+
+  my %login2uid = ();
+  # GEt abills logins
+  my DBI $_db = db_connect({ ABILLS_DB => 1 });
+
+  my $sql = "SELECT uid, id AS login, bill_id FROM users;";
+
+  my DBI $q = $_db->prepare($sql);
+  $q->execute();
+  while (my $row = $q->fetchrow_hashref()) {
+    $login2uid{$row->{login}}{UID}=$row->{uid};
+    $login2uid{$row->{login}}{BILL_ID}=$row->{bill_id};
+  }
+
+  return \%login2uid;
+}
 
 #**********************************************************
 =head2 get_nodeny() Export from Nodeny
@@ -2864,8 +2993,8 @@ sub get_carbon4 {
 
   );
 
-#  my %fields_rev = reverse(%fields);
-#  my $fields_list = "login, " . join(", \n", values(%fields));
+  #  my %fields_rev = reverse(%fields);
+  #  my $fields_list = "login, " . join(", \n", values(%fields));
 
   my %attribute_type_id_for = (
     PHONE        => 1,
