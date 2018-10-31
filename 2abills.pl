@@ -27,8 +27,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.82
-  UPDATE: 20180812
+  VERSION: 0.83
+  UPDATE: 20180826
 
 =cut
 
@@ -38,7 +38,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.82;
+my $VERSION = 0.83;
 
 our (%conf);
 
@@ -50,18 +50,18 @@ if (defined($argv->{'help'}) || $#ARGV < 0) {
   exit 0;
 }
 
-my $IMPORT_FILE = $argv->{IMPORT_FILE} || '';
-my $FILE_FIELDS = $argv->{FILE_FIELDS} || '';
+my $IMPORT_FILE   = $argv->{IMPORT_FILE} || '';
+my $FILE_FIELDS   = $argv->{FILE_FIELDS} || '';
 my $DEFAULT_PASSWORD = $argv->{DEFAULT_PASSWORD} || 'xxxx';
 #my $email_export     = $ARGUMENTS->{EMAIL_CREATE}     || 1; #FIXME : missing functions
 my $EMAIL_DOMAIN_ID = $argv->{EMAIL_DOMAIN} || 1;
-my $DEBUG = $argv->{DEBUG} || 0;
+my $DEBUG         = $argv->{DEBUG} || 0;
 #my $no_deposit       = $ARGUMENTS->{NO_DEPOSIT}       || 0; #FIXME : missing functions
 my $EXCHANGE_RATE = $argv->{EXCHANGE_RATE} || 0;
-my $FORMAT = ($argv->{'HTML'}) ? 'html' : '';
-my $SYNC_DEPOSIT = $argv->{SYNC_DEPOSIT} || 0;
+my $FORMAT        = ($argv->{'HTML'}) ? 'html' : '';
+my $SYNC_DEPOSIT  = $argv->{SYNC_DEPOSIT} || 0;
 my %EXTENDED_STATIC_FIELDS = ();
-my $debug = $argv->{DEBUG} || 0;
+my $debug         = $argv->{DEBUG} || 0;
 
 while (my ($k, $v) = each(%$argv)) {
   if ($k =~ /^(\d)\./) {
@@ -156,7 +156,7 @@ if ($from) {
   elsif ($from eq 'mikbill_freeze') {
     $INFO_LOGINS = get_mikbill({ FREEZE => 1 });
   }
-  elsif($from eq 'mikbill_payments') {
+  elsif ($from eq 'mikbill_payments') {
     mikbill_payments();
   }
   #  elsif ($from eq 'mikbill_deleted') {
@@ -194,6 +194,13 @@ if ($from) {
   }
   elsif ($from eq 'carbon4') {
     $INFO_LOGINS = get_carbon4();
+  }
+  elsif (defined(\&{$from})) {
+    if($debug > 4) {
+      print "Custom function: $from\n";
+    }
+
+    $INFO_LOGINS = &{\&$from}();
   }
 
   show($INFO_LOGINS);
@@ -265,7 +272,8 @@ ABillS not installed\n";
       $_db = DBI->connect("dbi:$dbtype:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
         or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n"
         . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd
-        . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows;
+        . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows
+        . "\nUSE:\n\n  DB_HOST=  DB_USER= DB_PASSWORD= DB_CHARSET= DB_NAME=  \n";
     }
 
     return $_db;
@@ -285,7 +293,8 @@ ABillS not installed\n";
     || die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n"
     . "password: $dbpasswd \n$!\n" . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser
     . ' dbpassword - ' . $dbpasswd . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n"
-    . $DBI::err . "\n" . $DBI::rows;
+    . $DBI::err . "\n" . $DBI::rows
+    . "\nUSE:\n\n  DB_HOST=  DB_USER= DB_PASSWORD= DB_CHARSET= DB_NAME=  \n";
 
   if ($argv->{DB_CHARSET}) {
     $_db->do("SET NAMES $argv->{DB_CHARSET}");
@@ -663,7 +672,6 @@ sub get_abills {
 
   undef($q);
   return \%logins_hash;
-
 }
 
 #**************************************************
@@ -1331,26 +1339,26 @@ sub show {
     'PASSWORD' => 2
   );
 
-  my @titls = sort keys %$logins_info;
+  my @titles = sort keys %$logins_info;
 
-  if ($#titls == -1) {
+  if ($#titles == -1) {
     print "Error: No input data\n";
     return 0;
   }
 
-  my $login = $titls[0];
+  my $login = $titles[0];
 
-  @titls = sort keys %{$logins_info->{$login}};
+  @titles = sort keys %{$logins_info->{$login}};
 
   if ($argv->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
-    push @titls, '1.UID';
+    push @titles, '1.UID';
   }
 
   if ($FORMAT eq 'html') {
     $output = "<table border=1>\n" . "<tr><th>LOGIN</th>
 	<th>PASSWORD</th>\n";
 
-    foreach my $column_title (@titls) {
+    foreach my $column_title (@titles) {
       next if ($exaption{$column_title});
       $output .= "<th>$column_title</th>\n";
     }
@@ -1369,12 +1377,16 @@ sub show {
 
     if ($FORMAT eq 'html') {
       $output .= "<tr><td>$logins_info->{$login_}{'LOGIN'}</td><td>$logins_info->{$login_}{'PASSWORD'}</td>";
-      foreach my $column_title (@titls) {
-
+      my $col_number = 0;
+      foreach my $column_title (@titles) {
+        $col_number++;
         if (!$column_title) {
-          print "//" . $column_title;
+          print "Column: $col_number " . ($column_title || "empty title\n");
+          print join("\n", @titles);
+          print "\n";
           exit;
         }
+
         next if ($exaption{$column_title});
         my $value = $logins_info->{$login_}{$column_title} || q{};
         if ($argv->{win2utf}) {
@@ -1388,7 +1400,7 @@ sub show {
     else {
       $output .= "$logins_info->{$login_}{'LOGIN'}\t" . (($logins_info->{$login_}{'PASSWORD'}) ? $logins_info->{$login_}{'PASSWORD'} : '') . "\t";
 
-      foreach my $column_title (@titls) {
+      foreach my $column_title (@titles) {
         next if ($exaption{$column_title});
 
         my $value = $logins_info->{$login_}{$column_title} || q{};
@@ -2117,7 +2129,7 @@ sub mikbill_pools {
 #**********************************************************
 sub mikbill_payments {
 
-  if($debug > 1) {
+  if ($debug > 1) {
     print "Plugin: mikbill_payments \n";
   }
 
@@ -2145,17 +2157,17 @@ ORDER BY date;
   my DBI $q = $db->prepare($sql);
   $q->execute();
   while (my $row = $q->fetchrow_hashref()) {
-    my $uid     = $login2uid->{$row->{login}}{UID} || 0;
+    my $uid = $login2uid->{$row->{login}}{UID} || 0;
     my $bill_id = $login2uid->{$row->{login}}{BILL_ID} || 0;
 
-    if($debug > 1) {
+    if ($debug > 1) {
       print "LOGIN: $row->{login} UID: $uid BILL_ID: $bill_id SUM: $row->{sum} DATE: $row->{date}\n";
     }
 
     my $insert_query = "INSERT INTO payments (uid, bill_id, sum, date, ext_id)
      VALUES ($uid, $bill_id, '$row->{sum}', '$row->{date}', 'migrate: $row->{id}');";
 
-    if($debug > 1) {
+    if ($debug > 1) {
       print "$insert_query\n";
     }
     $db_abills->do($insert_query);
@@ -2181,8 +2193,8 @@ sub login2uid {
   my DBI $q = $_db->prepare($sql);
   $q->execute();
   while (my $row = $q->fetchrow_hashref()) {
-    $login2uid{$row->{login}}{UID}=$row->{uid};
-    $login2uid{$row->{login}}{BILL_ID}=$row->{bill_id};
+    $login2uid{$row->{login}}{UID} = $row->{uid};
+    $login2uid{$row->{login}}{BILL_ID} = $row->{bill_id};
   }
 
   return \%login2uid;
@@ -3266,5 +3278,118 @@ INSERT INTO abills.fees (uid, bill_id, dsc, date, sum, last_deposit)  SELECT s.u
 
   return 1;
 }
+
+#*********************************************************
+=head2 custom_1() - Custom ernestas system
+
+=cut
+#*********************************************************
+sub custom_1 {
+
+  my %fields = (
+    'id'                      => 'id',
+    'timestamp'               => '1.REGISTRATION',
+    'sutartis'                => '3.CONTRACT_ID',    #номер контракта
+    'vardas'                  => '3.FIO',            #имя
+    'pavarde'                 => '3.FIO',            #фамилия
+    'miestas'                 => '3.CITY',           #гогрод
+    'gatve'                   => '3.ADDRESS_STREET', # улица
+    'namas'                   => '3.ADDRESS_BUILD',  # дом
+    'butas'                   => '3.ADDRESS_FLAT',   # квартира
+    'email'                   => '3.EMAIL',
+    'kodas'                   => '1.UID',    #-персональный код человека или компании
+    'planas'                  => '4.TP_ID',  # план prioritetas-приоритет ???
+    'planas_id'               => '4.TP_NUM', # план ид
+    'pasirasyta'              => '',
+    'pajungimas'              => '',
+    'stop_nuo'                => '',
+    'stop_iki'                => '',
+    'info'                    => '',
+    'user'                    => '',
+    'telefonas'               => '',
+    'telefonas2'              => '',
+    'comment'                 => '',
+    'printbill'               => '',
+    'saskadresas'             => '',
+    'saskemail'               => '',
+    'saskinfo'                => '',
+    'postaddr'                => '',
+    'postcode'                => '',
+    'kreipinys'               => '4.STATUS', #неисправности
+    'saskpastaba'             => '',
+    'susije_asmenys'          => '',
+    'sustabdymo_atidejimas'   => '', # отложить отключение
+    'auto_stabdymas'          => '', # авто отключенте
+    'atidejimo_periodiskumas' => '',
+    'mokejimo_atidejimas'     => '',
+    'atidej_period_ived_data' => '',
+    'filialas'                => '3.BRANCH_OFFICE', # филиал
+    's_login'                 => 'LOGIN',
+    's_password'              => 'PASSWORD',
+    'susije_moketojai'        => '',
+    'asmeninis_kreditas'      => '1.CREDIT', #личный предоставленый кредит
+    'infopage'                => '',
+    'infopage_date'           => '',
+    'coord_wgs'               => '',
+    'coord_lks'               => '',
+    'coord_url'               => '',
+    'pozymis1'                => '',
+    'pozymis2'                => '',
+    'pozymis3'                => '',
+    'pozymis4'                => '',
+    'pozymis5'                => '',
+    'pozymis6'                => '',
+    'pozymis7'                => '',
+    'pozymis8'                => '',
+    'perspejimo_atidejimas'   => '',
+    'auto_perspejimas'        => '',
+    'kryptis'                 => '',
+    'info1'                   => '',
+    'info2'                   => '',
+    'info3'                   => '',
+    'im_kodas'                => '',
+    'pvm_kodas'               => '3._TAX_CODE', # ндс код
+  );
+
+  my %reverse = reverse(%fields);
+
+  my $fields_list = join(", \n", values(%reverse));
+
+  my $sql = "SELECT $fields_list FROM `klientai`;";
+  print "$sql\n" if ($DEBUG > 0);
+  my DBI $q = $db->prepare($sql);
+  $q->execute();
+
+  #my $query_fields = $q->{NAME};
+  #my $output       = '';
+  my %logins_hash = ();
+
+  while (my $row = $q->fetchrow_hashref()) {
+    my $LOGIN = $row->{id} || q{};
+    $logins_hash{$LOGIN}{LOGIN} = $LOGIN;
+    #for (my $i = 1; $i < $#row; $i++) {
+    foreach my $key (keys %$row) {
+      if ($DEBUG > 3) {
+        print "$key: $fields{$key} -> ". ($row->{$key} || q{}) ."\n";
+      }
+
+      #if(! $fields{ $key }) {
+        #print "NO field for key '$key'\n";
+        #exit;
+      #}
+
+      $logins_hash{$LOGIN}{ $fields{ $key } || '-' } = $row->{$key} || q{};
+    }
+
+    #Extended params
+    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
+      $logins_hash{$LOGIN}{$k} = $v;
+    }
+  }
+
+  undef($q);
+  return \%logins_hash;
+}
+
 
 1
