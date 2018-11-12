@@ -27,8 +27,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.83
-  UPDATE: 20180826
+  VERSION: 0.84
+  UPDATE: 20181026
 
 =cut
 
@@ -38,7 +38,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.83;
+my $VERSION = 0.84;
 
 our (%conf);
 
@@ -118,6 +118,9 @@ if ($from) {
   }
   elsif ($from eq 'utm5') {
     $INFO_LOGINS = get_utm5_users();
+  }
+  elsif($from eq 'custom_1') {
+    get_custom_1();
   }
   elsif ($from eq 'utm5cards') {
     utm5cards();
@@ -3284,7 +3287,7 @@ INSERT INTO abills.fees (uid, bill_id, dsc, date, sum, last_deposit)  SELECT s.u
 
 =cut
 #*********************************************************
-sub custom_1 {
+sub get_custom_1 {
 
   my %fields = (
     'id'                      => 'id',
