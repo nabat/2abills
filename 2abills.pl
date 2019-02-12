@@ -21,14 +21,15 @@ use warnings;
    BBilling
    Carbonsoft 4
    NIkasyatem
+   file
 
 
    2abills.pl former abills migration file for Cards module account creation
 
 =head1 VERSION
 
-  VERSION: 0.84
-  UPDATE: 20181026
+  VERSION: 0.85
+  UPDATE: 20190128
 
 =cut
 
@@ -136,12 +137,12 @@ if ($from) {
     if ($SYNC_DEPOSIT) {
       $FILE_FIELDS = 'LOGIN,NEW_SUM';
       $IMPORT_FILE = $SYNC_DEPOSIT;
-      $INFO_LOGINS = get_file();
+      $INFO_LOGINS = get_file($argv);
       sync_deposit($INFO_LOGINS);
       exit 0;
     }
     else {
-      $INFO_LOGINS = get_file();
+      $INFO_LOGINS = get_file($argv);
     }
   }
   elsif ($from eq 'abills') {
@@ -750,11 +751,18 @@ sub utm5cards {
 }
 
 #**************************************************
-=head2 get_file() Import from_TAB delimiter file
+=head2 get_file($attr) Import from_TAB delimiter file
+
+  Arguments:
+    $attr
+      CEL_DELIMITER
+
 
 =cut
 #**************************************************
 sub get_file {
+  my($attr)=@_;
+
   my @FILE_FIELDS = ('3.CONTRACT_ID', '3.FIO', 'LOGIN', 'PASSWORD', '3.ADDRESS_STREET', '4.IP', '3.COMMENTS', '5.SUM', '4.TP_ID', '3.PHONE',);
 
   @FILE_FIELDS = split(/,/, $FILE_FIELDS);
@@ -765,11 +773,16 @@ sub get_file {
   my %logins_hash = ();
   my %TARIFS_HASH = ();
   my $TP_ID = 0;
+  my $cel_delimiter = "\t";
 
   my $rows = file_content($IMPORT_FILE);
 
+  if($attr->{CEL_DELIMITER}) {
+    $cel_delimiter=$attr->{CEL_DELIMITER};
+  }
+
   foreach my $line (@$rows) {
-    my @cels = split(/\t/, $line);
+    my @cels = split(/$cel_delimiter/, $line);
     my %tmp_hash = ();
     my $COMMENTS = '';
     my $cel_phone = '';
@@ -778,6 +791,9 @@ sub get_file {
 
     for (my $i = 0; $i <= $#cels; $i++) {
       next if (!$FILE_FIELDS[$i]);
+      #Tim quote
+      $cels[$i] =~ s/^[\'\"]//;
+      $cels[$i] =~ s/[\'\"]$//;
 
       $tmp_hash{ $FILE_FIELDS[$i] } = $cels[$i];
       print "$i/$FILE_FIELDS[$i] - $cels[$i]\n" if ($DEBUG > 0);
@@ -849,7 +865,9 @@ sub get_file {
 }
 
 #**********************************************************
-#
+=head2 get_utm4_users
+
+=cut
 #**********************************************************
 sub get_utm4_users {
   my %fields = (
@@ -1327,6 +1345,9 @@ sub get_freenibs_users {
 #**********************************************************
 =head2 show($logins_info)
 
+  Arguments:
+    $logis_info (HASH_REF)
+
 =cut
 #**********************************************************
 sub show {
@@ -1401,7 +1422,7 @@ sub show {
       $output .= "</tr>\n";
     }
     else {
-      $output .= "$logins_info->{$login_}{'LOGIN'}\t" . (($logins_info->{$login_}{'PASSWORD'}) ? $logins_info->{$login_}{'PASSWORD'} : '') . "\t";
+      $output .= "$logins_info->{$login_}{'LOGIN'}\t" . (($logins_info->{$login_}{'PASSWORD'}) ? $logins_info->{$login_}{'PASSWORD'} : '-') . "\t";
 
       foreach my $column_title (@titles) {
         next if ($exaption{$column_title});
@@ -1635,7 +1656,8 @@ ABillS Migration system Version: $VERSION
                             odbc
                             nika
     SYNC_DEPOSIT        -  filename to sync deposit ( ./2abills.pl FROM=file SYNC_DEPOSIT=/usr/deposits )
-    IMPORT_FILE=[file]  - Tab delimiter file
+    IMPORT_FILE=[file]  - Tab delimiter file or CEL_DELIMITER=...
+    CEL_DELIMITER       - Cel delimiter for file
     FILE_FIELDS=[list,.]- Tab delimiter fields position (FILE_FIELDS=LOGIN,PASSWORD,3.FIO...)
     TP_MIGRATION=[file] - File with TP migration information.
                           Format:
