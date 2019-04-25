@@ -28,7 +28,7 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.85
+  VERSION: 0.86
   UPDATE: 20190128
 
 =cut
@@ -769,7 +769,6 @@ sub get_file {
 
   #$FILE_FIELDS[0] = 'LOGIN';
   #$FILE_FIELDS[1] = 'PASSWORD';
-
   my %logins_hash = ();
   my %TARIFS_HASH = ();
   my $TP_ID = 0;
@@ -976,49 +975,49 @@ sub get_utm5_users {
   my %fields = (
     'LOGIN'             => 'login',
     'PASSWORD'          => 'password',
-    '1.ACTIVATE'        => 'if(dp.start_date, DATE_FORMAT(FROM_UNIXTIME(dp.start_date), \'%Y-%m-%d\'), \'0000-00-00\')',
-    '1.EXPIRE'          => 'if(dp.end_date, DATE_FORMAT(FROM_UNIXTIME(dp.end_date), \'%Y-%m-%d\'), \'0000-00-00\')',
+    '1.ACTIVATE'        => 'IF(dp.start_date, DATE_FORMAT(FROM_UNIXTIME(dp.start_date), \'%Y-%m-%d\'), \'0000-00-00\')',
+    '1.EXPIRE'          => 'IF(dp.end_date, DATE_FORMAT(FROM_UNIXTIME(dp.end_date), \'%Y-%m-%d\'), \'0000-00-00\')',
 
     #  '1.COMPANY_ID'    => '',
     '1.CREDIT'          => 'credit',
-    '1.GID'             => 'if(gl.group_id, gl.group_id, 0)',
+    '1.GID'             => 'IF(gl.group_id, gl.group_id, 0)',
 
     #  '1.REDUCTION'     => '',
     '1.REGISTRATION'    => 'FROM_UNIXTIME(u.create_date)',
-    '1.DISABLE'         => 'if(a.is_blocked, 1, 0)',
+    '1.DISABLE'         => 'IF(a.is_blocked, 1, 0)',
 
     '3.ADDRESS_FLAT'    => 'flat_number',
-    '3.ADDRESS_STREET'  => 'if(t12.street!=\'\', t12.street, \'\')',
-    '3.ADDRESS_BUILD'   => 'if(t12.number!=\'\', t12.number, \'\')',
-    '3.COMMENTS'        => 'comments',
+    '3.ADDRESS_STREET'  => 'IF(t12.street!=\'\', t12.street, \'\')',
+    '3.ADDRESS_BUILD'   => 'IF(t12.number!=\'\', t12.number, \'\')',
+    '3.COMMENTS'        => 'ua.comments',
 
     #  '3.CONTRACT_ID'       => '',
-    '3.EMAIL'           => 'if(u.email!=\'\', u.email, \'\')',
+    '3.EMAIL'           => 'IF(u.email!=\'\', u.email, \'\')',
     '3.FIO'             => 'full_name',
     '3.PASPORT_GRANT'   => 'passport',
     '3.PHONE'           => 'home_telephone',
     '3.COUNTRY_ID'      => '804',
-    '3.ZIP'             => 'if(t12.post_code!=\'\', t12.post_code, \'\')',
-    '3.CITY '           => 'if(t12.city!=\'\', t12.city, \'\')',
+    '3.ZIP'             => 'IF(t12.post_code!=\'\', t12.post_code, \'\')',
+    '3.CITY '           => 'IF(t12.city!=\'\', t12.city, \'\')',
 
-    '3._entrance'       => 'if(t12.building!=\'\', t12.building, \'\')',
-    '3._work_telephone' => 'if(u.work_telephone!=\'\', u.work_telephone, \'\')',
-    '3._mobile'         => 'if(u.mobile_telephone!=\'\', u.mobile_telephone, \'\')',
-    '3._icq_number'     => 'if(u.icq_number!=\'\', u.icq_number, \'\')',
-    '3._web_page'       => 'if(u.web_page!=\'\', u.web_page, \'\')',
-    '3._old_id'         => 'if(u.id, u.id, \'\')',
-    '3._tariff_name'    => 'if(t9.name!=\'\', t9.name, \'\')',
-    '3._group_name'     => 'if(t11.group_name!=\'\', t11.group_name, \'\')',
+    '3._entrance'       => 'IF(t12.building!=\'\', t12.building, \'\')',
+    '3._work_telephone' => 'IF(u.work_telephone!=\'\', u.work_telephone, \'\')',
+    '3._mobile'         => 'IF(u.mobile_telephone!=\'\', u.mobile_telephone, \'\')',
+    '3._icq_number'     => 'IF(u.icq_number!=\'\', u.icq_number, \'\')',
+    '3._web_page'       => 'IF(u.web_page!=\'\', u.web_page, \'\')',
+    '3._old_id'         => 'IF(u.id, u.id, \'\')',
+    '3._tariff_name'    => 'IF(t9.name!=\'\', t9.name, \'\')',
+    '3._group_name'     => 'IF(t11.group_name!=\'\', t11.group_name, \'\')',
 
-    '4.CID'             => 'if(t1.mac!=\'\', t1.mac, \'\')',
+    '4.CID'             => 'IF(t1.mac!=\'\', t1.mac, \'\')',
 
     #  '4.FILTER_ID'      => '',
-    '4.IP'              => 'if(inet_ntoa(t1.ip&0xffffffff), inet_ntoa(t1.ip&0xffffffff), \'\')',
+    '4.IP'              => 'IF(INET_NTOA(t1.ip&0xffffffff), INET_NTOA(t1.ip&0xffffffff), \'\')',
 
     #  '4.NETMASK'        => '\'255.255.255.255\'',
     #  '4.SIMULTANEONSLY' => 'simultaneous_use',
     #  '4.SPEED'          => 'speed',
-    '4.TP_ID'           => 'if(atl.tariff_id, atl.tariff_id, 0)',
+    '4.TP_ID'           => 'IF(atl.tariff_id, atl.tariff_id, 0)',
 
     #  '4.CALLBACK'       => 'allow_callback',
 
@@ -1043,7 +1042,7 @@ sub get_utm5_users {
   my %fields_rev = reverse(%fields);
   my $fields_list = "u.login, " . join(", \n", values(%fields));
 
-  my $sql = "select $fields_list
+  my $sql = "SELECT $fields_list
   FROM (users u, users_accounts ua, accounts a)
   LEFT JOIN users_groups_link gl ON (u.id=gl.user_id)
   LEFT JOIN account_tariff_link atl ON (a.id=atl.account_id and atl.is_deleted=0)
@@ -1057,8 +1056,8 @@ sub get_utm5_users {
   LEFT JOIN houses t12 ON (t12.id = u.house_id)
 
   WHERE u.id=ua.uid
-  and ua.account_id=a.id
-  and a.is_deleted=0
+    AND ua.account_id=a.id
+    AND a.is_deleted=0
   GROUP BY u.login
   ORDER BY 1
 
@@ -1102,7 +1101,6 @@ sub get_utm5_users {
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
       $logins_hash{$LOGIN}{$k} = $v;
     }
-
   }
 
   undef($q);
