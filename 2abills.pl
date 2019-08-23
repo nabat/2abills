@@ -28,8 +28,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.86
-  UPDATE: 20190128
+  VERSION: 0.87
+  UPDATE: 20190823
 
 =cut
 
@@ -39,7 +39,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.84;
+my $VERSION = 0.87;
 
 our (%conf);
 
