@@ -28,8 +28,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.86
-  UPDATE: 20190128
+  VERSION: 0.87
+  UPDATE: 20190823
 
 =cut
 
@@ -39,7 +39,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.84;
+my $VERSION = 0.87;
 
 our (%conf);
 
@@ -90,8 +90,16 @@ if ($from) {
   elsif ($from eq 'ODBC') {
     $argv->{DB_TYPE} = 'ODBC';
   }
+  elsif ($from eq 'carbon4') {
+    $argv->{DB_TYPE} = 'ODBC';
+  }
+  elsif ($from eq 'carbon5') {
+    $argv->{DB_TYPE} = 'ODBC';
+  }
 
-  $db = db_connect({ %$argv });
+  if($from ne 'file'){
+    $db = db_connect({ %$argv });
+  }
 }
 
 #Tarif migration section
@@ -199,6 +207,9 @@ if ($from) {
   elsif ($from eq 'carbon4') {
     $INFO_LOGINS = get_carbon4();
   }
+  elsif ($from eq 'carbon5') {
+    $INFO_LOGINS = get_carbon5();
+  }
   elsif (defined(\&{$from})) {
     if($debug > 4) {
       print "Custom function: $from\n";
@@ -223,6 +234,7 @@ if ($db) {
       DB_NAME
       DB_USER
       DB_PASSWORD
+      DB_PATH
       ABILLS_DB
 
   Returns:
@@ -240,6 +252,7 @@ sub db_connect {
   my $dbuser = $attr->{DB_USER} || "root";
   my $dbpasswd = $attr->{DB_PASSWORD} || "";
   my $dbtype = $attr->{DB_TYPE} || "mysql"; #Pg
+  my $dbpath = $attr->{DB_PATH} || ""; #carbon
 
   if ($attr->{ABILLS_DB}) {
     if (!-f '/usr/abills/libexec/config.pl') {
@@ -270,7 +283,12 @@ ABillS not installed\n";
     DBD::ODBC->import();
 
     if ($from eq 'carbon4') {
-      $_db = get_connection_to_firebird_host($dbhost, '/var/db/ics_main.gdb', $dbpasswd);
+      if (!$dbpath) {$dbpath = '/var/db/ics_main.gdb';}
+      $_db = get_connection_to_firebird_host($dbhost, $dbpath, $dbpasswd);
+    }
+    elsif ($from eq 'carbon5') {
+      if (!$dbpath) {$dbpath = '/var/db/billing.gdb';}
+      $_db = get_connection_to_firebird_host($dbhost, $dbpath, $dbpasswd);
     }
     else {
       $_db = DBI->connect("dbi:$dbtype:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
@@ -1341,10 +1359,31 @@ sub get_freenibs_users {
 }
 
 #**********************************************************
+=head2 all_columns($logins_info) - Returns all used columns 
+
+  Arguments:
+    $logins_info (HASH_REF)
+
+  Returns: 
+    @columns
+=cut
+#**********************************************************
+sub all_columns {
+  my ($logins_info) = @_;
+  my %columns;
+  foreach my $login (values %$logins_info){
+    foreach(keys %$login){
+     $columns{$_}=1;
+    }
+  };
+  return (sort keys %columns);
+}
+
+#**********************************************************
 =head2 show($logins_info)
 
   Arguments:
-    $logis_info (HASH_REF)
+    $logins_info (HASH_REF)
 
 =cut
 #**********************************************************
@@ -1370,7 +1409,7 @@ sub show {
 
   my $login = $titles[0];
 
-  @titles = sort keys %{$logins_info->{$login}};
+  @titles = all_columns($logins_info);
 
   if ($argv->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
     push @titles, '1.UID';
@@ -1410,7 +1449,10 @@ sub show {
         }
 
         next if ($exaption{$column_title});
-        my $value = $logins_info->{$login_}{$column_title} || q{};
+        my $value = q{};
+        if (defined($logins_info->{$login_}{$column_title})) {
+          $value = $logins_info->{$login_}{$column_title};
+        }
         if ($argv->{win2utf}) {
           $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
         }
@@ -1667,6 +1709,7 @@ ABillS Migration system Version: $VERSION
     DB_PASSWORD         -
     DB_CHARSET          -
     DB_NAME             -
+    DB_PATH             - Path to DB file for carbon
     HTML                - Show export file in HTML FORMAT
     win2utf             - Convert info from win1251 to utf8
     help                - This help
@@ -3127,39 +3170,179 @@ sub get_carbon4 {
     }
   }
 
-  # Show result
-  my $divider = "\t";
+  # Form result
+  my %result_hash;
   foreach my $user_row (@{$users_list}) {
 
-    # print login, password
     my $login = $user_row->{LOGIN};
     my $password = $user_row->{PSW} || $DEFAULT_PASSWORD;
+    if ($password =~ /^\0+$/){
+      $password = $DEFAULT_PASSWORD;
+    }
 
     next if ($user_row->{LOGIN} =~ /\d+\-\d+/);
 
     delete $user_row->{LOGIN};
     delete $user_row->{PSW};
 
-    my @attributes_row = ();
+    my %attributes_hash;
 
-    # Login and password are going as first two columns
-    push(@attributes_row, ($login, $password));
+    $attributes_hash{LOGIN} = $login;
+    $attributes_hash{PASSWORD} = $password;
 
-    # Saving all other attributes in sorted by attr order
-    foreach my $attribute_name (sort keys %fields) {
+    # Saving all other attributes
+    foreach my $attribute_name (keys %fields) {
       my $attr_value = $user_row->{ $fields{$attribute_name} };
       next if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/);
-      push(@attributes_row, "$attribute_name=" . '"' . $attr_value . '"');
+      $attributes_hash{$attribute_name}=$attr_value;
     }
 
-    # Show result
-    print join($divider, @attributes_row);
+    $result_hash{$login} = \%attributes_hash;
+  }
+  return \%result_hash;
+}
 
-    # Next line
-    print "\n";
+#**********************************************************
+=head2 get_carbon5() - Import from Carbon 5
+
+=cut
+#**********************************************************
+sub get_carbon5 {
+  my %fields = (
+    'LOGIN'            => 'LOGIN',
+    'PASSWORD'         => 'PSW',
+    '1.ACTIVATE'       => 'ACTIVATE_DATE',
+    '1.GID'            => 'PARID',
+    '1.DISABLE'        => 'DISABLED',
+
+    #    '1.REDUCTION' => 'discount',
+
+    '3.ADDRESS_FLAT'   => 'A_HOME_NUMBER',
+    '3.ADDRESS_STREET' => 'STREET',
+    '3.ADDRESS_BUILD'  => 'S_NUMBER',
+
+    #    '3.COMMENTS'       => 'comment',
+    #    '3.CONTRACT_ID'    => 'num_contract',
+    '3.EMAIL'          => 'EMAIL',
+    '3.FIO'            => 'IDENTIFY',
+    '3.PHONE'          => 'PHONE',
+    '3.PASPORT_DATE'   => 'PASPORT_DATE',
+    '3.PASPORT_GRANT'  => 'PASPORT_GRANT',
+    '3.PASPORT_NUM'    => 'PASPORT_NUM',
+    '3.CITY'           => 'CITY',
+
+    '4.CID'            => 'MAC',
+    '4.IP'             => 'IP',
+    '4.SPEED'          => 'LIMIT',
+    '4.TP_ID'          => 'TARIFF_NO',
+
+    '5.SUM'            => 'OSTATOK',
+
+  );
+
+  #  my %fields_rev = reverse(%fields);
+  #  my $fields_list = "login, " . join(", \n", values(%fields));
+
+  my %attribute_type_id_for = (
+    PHONE        => 1,
+    PASPORT_NUM  => 13,
+
+    #    PASPORT_SER => 15,
+    PASPORT_BY   => 16,
+    PASPORT_DATE => 17,
+  );
+
+  my $sql = "SELECT USERS.LOGIN,
+                    USERS.PSW,
+                    USERS.ENABLED AS ENABLED,
+                    0 AS DISABLED,
+                    USERS.ID,
+                    USERS.ACTIVATE_DATE,
+                    USERS.PARID,
+                    USERS.A_HOME_NUMBER,
+                    HOMES.CITY,
+                    HOMES.STREET,
+                    HOMES.S_NUMBER,
+                    USERS.EMAIL,
+                    USERS.IDENTIFY,
+                    USERS.MAC,
+                    USERS.IP,
+                    USERS.OSTATOK,
+                    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PHONE}) AS PHONE,
+    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PASPORT_NUM}) AS PASPORT_NUM,
+    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PASPORT_BY}) AS PASPORT_GRANT,
+    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PASPORT_DATE}) AS PASPORT_DATE
+
+     FROM USERS
+     LEFT JOIN HOMES ON (HOMES.ID = USERS.HOME_ID);
+          ";
+
+  #print $sql;
+  if ($DEBUG > 4) {
+    print $sql;
+    return 0;
+  }
+  elsif ($DEBUG > 0) {
+    print "$sql\n";
+  }
+  my DBI::st $q = $db->prepare($sql);
+  $q->execute();
+
+  my $users_list = $q->fetchall_hashref('ID');
+
+  my %without_logins = ();
+  foreach my $user (values %{$users_list}) {
+
+    # Translating carbon 'ENABLED' to abills 'disabled' attr
+    $user->{DISABLED} = !$user->{ENABLED};
+
+    if (!$user->{LOGIN}) {
+      $without_logins{ $user->{ID} } = $user;
+
+      #      print "!!! User $user->{ID}( $user->{IDENTIFY}  ) don't have login. \n Will not be included in results \n";
+      delete $users_list->{ $user->{ID} };
+    }
   }
 
-  exit;
+  $users_list = [values %{$users_list}];
+
+  foreach my $user (@{$users_list}) {
+    if (exists $without_logins{ $user->{PARID} }) {
+
+      #      print "$user->{IDENTIFY} is probably a group \n";
+    }
+  }
+
+  # Form result
+  my %result_hash;
+  foreach my $user_row (@{$users_list}) {
+
+    my $login = $user_row->{LOGIN};
+    my $password = $user_row->{PSW} || $DEFAULT_PASSWORD;
+    if ($password =~ /^\0+$/){
+      $password = $DEFAULT_PASSWORD;
+    }
+
+    next if ($user_row->{LOGIN} =~ /\d+\-\d+/);
+
+    delete $user_row->{LOGIN};
+    delete $user_row->{PSW};
+
+    my %attributes_hash;
+
+    $attributes_hash{LOGIN} = $login;
+    $attributes_hash{PASSWORD} = $password;
+
+    # Saving all other attributes
+    foreach my $attribute_name (keys %fields) {
+      my $attr_value = $user_row->{ $fields{$attribute_name} };
+      next if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/);
+      $attributes_hash{$attribute_name}=$attr_value;
+    }
+
+    $result_hash{$login} = \%attributes_hash;
+  }
+  return \%result_hash;
 }
 
 #**********************************************************
