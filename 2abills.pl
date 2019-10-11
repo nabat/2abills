@@ -12,7 +12,7 @@ use warnings;
    UTM4
    UTM5 (mysql, Postgres)
    Mikbill
-   Stragazer
+   Stargazer
    Nodeny
    Traffpro
    Lanbiling
@@ -20,6 +20,7 @@ use warnings;
    Unisys
    BBilling
    Carbonsoft 4
+   Carbonsoft 5
    NIkasyatem
    file
 
@@ -28,8 +29,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.87
-  UPDATE: 20190823
+  VERSION: 0.88
+  UPDATE: 20191011
 
 =cut
 
@@ -39,7 +40,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.87;
+my $VERSION = 0.88;
 
 our (%conf);
 
@@ -1691,6 +1692,8 @@ ABillS Migration system Version: $VERSION
                            	traffpro
                             stargazer    - MySQL DB
                             stargazer_pg - stargazer Postgree DB
+                            carbon4
+                            carbon5
                             lms
                             lms_nodes (IP, MAC adresses for lms users)
                             odbc
@@ -3203,6 +3206,37 @@ sub get_carbon4 {
 }
 
 #**********************************************************
+=head2 convert_date() - Converts date from different formats to YYYY-MM-DD
+
+=cut
+#**********************************************************
+sub convert_date{
+  my ($date) = @_;
+  my $year, my $month, my $day;
+  if($date =~ /^(\d{4})-(\d{2})-(\d{2})$/){
+    ($year, $month, $day) = ($1, $2, $3);
+  }
+  if($date =~ /^(\d{2})\.(\d{2})\.(\d{4})$/){
+    ($year, $month, $day) = ($3, $2, $1);
+  }
+  if($date =~ /^(\d{2})\.(\d{2})\.(\d{2})$/){
+    ($year, $month, $day) = ($3, $2, $1);
+    if ($year > 30){ #TODO
+      $year += 1900;
+    }else{
+  $year += 2000;
+    }
+  }
+  if(defined($year)){
+    return $year."-".$month."-".$day;
+  }
+  else{
+    return $date;
+  }
+
+}
+
+#**********************************************************
 =head2 get_carbon5() - Import from Carbon 5
 
 =cut
@@ -3210,33 +3244,39 @@ sub get_carbon4 {
 sub get_carbon5 {
   my %fields = (
     'LOGIN'            => 'LOGIN',
-    'PASSWORD'         => 'PSW',
-    '1.ACTIVATE'       => 'ACTIVATE_DATE',
-    '1.GID'            => 'PARID',
-    '1.DISABLE'        => 'DISABLED',
-
-    #    '1.REDUCTION' => 'discount',
-
-    '3.ADDRESS_FLAT'   => 'A_HOME_NUMBER',
+    'PASSWORD'         => 'GEN_PWD',
+    '1.ACTIVATE'       => 'ACTIVATE',
+    '3.CONTRACT_ID'    => 'CONTRACT_NUMBER',
+    '3.CONTRACT_DATE'  => 'CONTRACT_DATE',
+    '3.FIO'            => 'NAME',
+    '3._COUNTRY'       => 'COUNTRY',
+    '3.CITY'           => 'CITY',
+    '3._REGION'        => 'REGION',
     '3.ADDRESS_STREET' => 'STREET',
     '3.ADDRESS_BUILD'  => 'S_NUMBER',
 
-    #    '3.COMMENTS'       => 'comment',
-    #    '3.CONTRACT_ID'    => 'num_contract',
+    '3.PHONE'          => 'SMS',
     '3.EMAIL'          => 'EMAIL',
-    '3.FIO'            => 'IDENTIFY',
-    '3.PHONE'          => 'PHONE',
+    '4.TP_NUM'         => 'TP_NUM',
+    '5.SUM'            => 'OSTATOK',
     '3.PASPORT_DATE'   => 'PASPORT_DATE',
     '3.PASPORT_GRANT'  => 'PASPORT_GRANT',
     '3.PASPORT_NUM'    => 'PASPORT_NUM',
-    '3.CITY'           => 'CITY',
-
-    '4.CID'            => 'MAC',
+    '4.LOGIN'          => 'LOGIN',
+    '4.PASSWORD'       => 'GEN_PWD',
     '4.IP'             => 'IP',
-    '4.SPEED'          => 'LIMIT',
-    '4.TP_ID'          => 'TARIFF_NO',
+    '11.IPTV_LOGIN'    => 'IPTV_LOGIN',
+    '11.IPTV_PASSWORD' => 'IPTV_PASSWORD',
+    '1.REDUCTION'      => 'LOYALTY',
 
-    '5.SUM'            => 'OSTATOK',
+    '12.TP_ID'         => 'TP_ID',
+    '12.TP_NAME'       => 'TP_NAME',
+    '12.TP_SUM'        => 'TP_SUM',
+
+
+    #'1.GID'            => 'PARID',
+    #'1.DISABLE'        => 'DISABLED',
+
 
   );
 
@@ -3252,30 +3292,68 @@ sub get_carbon5 {
     PASPORT_DATE => 17,
   );
 
-  my $sql = "SELECT USERS.LOGIN,
-                    USERS.PSW,
-                    USERS.ENABLED AS ENABLED,
-                    0 AS DISABLED,
-                    USERS.ID,
-                    USERS.ACTIVATE_DATE,
-                    USERS.PARID,
-                    USERS.A_HOME_NUMBER,
-                    HOMES.CITY,
-                    HOMES.STREET,
-                    HOMES.S_NUMBER,
-                    USERS.EMAIL,
-                    USERS.IDENTIFY,
-                    USERS.MAC,
-                    USERS.IP,
-                    USERS.OSTATOK,
-                    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PHONE}) AS PHONE,
-    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PASPORT_NUM}) AS PASPORT_NUM,
-    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PASPORT_BY}) AS PASPORT_GRANT,
-    (SELECT ATTRIBUTE_VALUE FROM ATTRIBUTE_VALUES WHERE USER_ID=USERS.ID AND ATTRIBUTE_ID=$attribute_type_id_for{PASPORT_DATE}) AS PASPORT_DATE
+  my $sql = 'SELECT A.ID,
+            (SELECT FIRST(1) U.LOGIN FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL),
+            (SELECT FIRST(1) U.GEN_PWD FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL),
+            A.CONTRACT_NUMBER,
+            CAST(A.CREATE_DATE as date) AS CONTRACT_DATE,
+            A.NAME,
+            H.COUNTRY,H.CITY,H.REGION,H.STREET,H.S_NUMBER,H.S_LITER,
+            A.SMS,
+            A.EMAIL,
+            round((aa.ostatok+aa.debit-aa.credit) / cast((10000000000) as numeric(18,5)), 2) AS OSTATOK,
+            T.ID AS TP_NUM,
+            L.NAME AS LOYALTY,
+            (select AV.ATTRIBUTE_VALUE as "PASPORT_DATE"
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 17
+            and AV.ABONENT_ID = A.ID),
+            (select AV.ATTRIBUTE_VALUE as "PASPORT_GRANT"
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 16
+            and AV.ABONENT_ID = A.ID),
+            (select AV.ATTRIBUTE_VALUE
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 14
+            and AV.ABONENT_ID = A.ID)||
+            (select AV.ATTRIBUTE_VALUE
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 13
+            and AV.ABONENT_ID = A.ID) as "PASPORT_NUM",
+            (SELECT FIRST(1) UF_IP2STRING(IP) FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL) AS IP,
+            (SELECT NAME FROM IP_PULL WHERE PULL_ID = (
+             SELECT FIRST(1) PULL_ID FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL)) AS IP_PULL,
+            (SELECT MIN(NEXT_DATE) FROM USERS_USLUGA WHERE ABONENT_ID=A.ID AND NEXT_DATE > current_timestamp)-30 AS ACTIVATE,--
+            (SELECT FIRST(1) U.LOGIN FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NULL) AS IPTV_LOGIN,
+            (SELECT FIRST(1) U.GEN_PWD FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NULL) AS IPTV_PASSWORD,
 
-     FROM USERS
-     LEFT JOIN HOMES ON (HOMES.ID = USERS.HOME_ID);
-          ";
+            (SELECT FIRST(1) u.ID FROM USLUGA u
+            LEFT JOIN USERS_USLUGA uu ON uu.ABONENT_ID = a.ID
+            LEFT JOIN TARIF_USERS_USLUGA tuu ON u.ID = tuu.USLUGA_ID
+            LEFT JOIN TARIF t ON tuu.TARIF_ID = t.ID
+            WHERE u.ID = uu.USLUGA_ID AND
+            uu.DELETED = 0 AND UU.ENABLED = 1 AND
+            t.ID IS NULL) AS TP_ID,
+            (SELECT FIRST(1) u.NAME FROM USLUGA u
+            LEFT JOIN USERS_USLUGA uu ON uu.ABONENT_ID = a.ID
+            LEFT JOIN TARIF_USERS_USLUGA tuu ON u.ID = tuu.USLUGA_ID
+            LEFT JOIN TARIF t ON tuu.TARIF_ID = t.ID
+            WHERE u.ID = uu.USLUGA_ID AND
+            uu.DELETED = 0 AND UU.ENABLED = 1 AND
+            t.ID IS NULL) AS TP_NAME,
+            (SELECT FIRST(1) round((u.SUMMA) / cast((10000000000) as numeric(18,5)), 2) FROM USLUGA u
+            LEFT JOIN USERS_USLUGA uu ON uu.ABONENT_ID = a.ID
+            LEFT JOIN TARIF_USERS_USLUGA tuu ON u.ID = tuu.USLUGA_ID
+            LEFT JOIN TARIF t ON tuu.TARIF_ID = t.ID
+            WHERE u.ID = uu.USLUGA_ID AND
+            uu.DELETED = 0 AND UU.ENABLED = 1 AND
+            t.ID IS NULL) AS TP_SUM
+
+            FROM ABONENTS AS A
+            LEFT JOIN HOMES AS H on H.ID = A.HOME_ID
+            left join ADMIN_ACCOUNTS AA on AA.ID=A.ACCOUNT_ID
+            left join TARIF T on T.ID = A.TARIF_ID
+            LEFT JOIN LOYALTYS L on L.ID = A.LOYALTY_ID';
 
   #print $sql;
   if ($DEBUG > 4) {
@@ -3306,12 +3384,12 @@ sub get_carbon5 {
 
   $users_list = [values %{$users_list}];
 
-  foreach my $user (@{$users_list}) {
-    if (exists $without_logins{ $user->{PARID} }) {
-
-      #      print "$user->{IDENTIFY} is probably a group \n";
-    }
-  }
+  #foreach my $user (@{$users_list}) {
+  #  if (exists $without_logins{ $user->{PARID} }) {
+  #
+  #    #      print "$user->{IDENTIFY} is probably a group \n";
+  #  }
+  #}
 
   # Form result
   my %result_hash;
@@ -3323,7 +3401,9 @@ sub get_carbon5 {
       $password = $DEFAULT_PASSWORD;
     }
 
-    next if ($user_row->{LOGIN} =~ /\d+\-\d+/);
+    if (($user_row->{LOGIN} =~ /\d+\-\d+/)||($user_row->{LOGIN} =~ /^\0/)){
+        next;
+    }
 
     delete $user_row->{LOGIN};
     delete $user_row->{PSW};
@@ -3336,7 +3416,10 @@ sub get_carbon5 {
     # Saving all other attributes
     foreach my $attribute_name (keys %fields) {
       my $attr_value = $user_row->{ $fields{$attribute_name} };
-      next if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/);
+      if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/ || $attr_value =~ /^\0/){
+	    next;
+	  }
+	  if($attribute_name eq '3.PASPORT_DATE') {$attr_value=convert_date($attr_value);}
       $attributes_hash{$attribute_name}=$attr_value;
     }
 

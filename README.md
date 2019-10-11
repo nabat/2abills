@@ -25,6 +25,8 @@ Migration system:
   Stargazer
   
   CarbonSoft 4
+
+  CarbonSoft 5
   
   LANBilling
   
