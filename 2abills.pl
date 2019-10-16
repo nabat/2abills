@@ -28,8 +28,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.86
-  UPDATE: 20190128
+  VERSION: 0.87
+  UPDATE: 20190428
 
 =cut
 
@@ -39,7 +39,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.84;
+my $VERSION = 0.87;
 
 our (%conf);
 
@@ -207,7 +207,9 @@ if ($from) {
     $INFO_LOGINS = &{\&$from}();
   }
 
-  show($INFO_LOGINS);
+  if($INFO_LOGINS) {
+    show($INFO_LOGINS);
+  }
 }
 
 if ($db) {
@@ -1060,8 +1062,6 @@ sub get_utm5_users {
     AND a.is_deleted=0
   GROUP BY u.login
   ORDER BY 1
-
-
 ";
 
   if ($DEBUG > 5) {
