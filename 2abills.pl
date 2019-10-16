@@ -12,7 +12,7 @@ use warnings;
    UTM4
    UTM5 (mysql, Postgres)
    Mikbill
-   Stragazer
+   Stargazer
    Nodeny
    Traffpro
    Lanbiling
@@ -20,6 +20,7 @@ use warnings;
    Unisys
    BBilling
    Carbonsoft 4
+   Carbonsoft 5
    NIkasyatem
    file
 
@@ -28,8 +29,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.87
-  UPDATE: 20190428
+  VERSION: 0.88
+  UPDATE: 20191011
 
 =cut
 
@@ -39,8 +40,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.87;
-
+my $VERSION = 0.88;
 our (%conf);
 
 #DB information
@@ -90,8 +90,16 @@ if ($from) {
   elsif ($from eq 'ODBC') {
     $argv->{DB_TYPE} = 'ODBC';
   }
+  elsif ($from eq 'carbon4') {
+    $argv->{DB_TYPE} = 'ODBC';
+  }
+  elsif ($from eq 'carbon5') {
+    $argv->{DB_TYPE} = 'ODBC';
+  }
 
-  $db = db_connect({ %$argv });
+  if($from ne 'file'){
+    $db = db_connect({ %$argv });
+  }
 }
 
 #Tarif migration section
@@ -199,6 +207,9 @@ if ($from) {
   elsif ($from eq 'carbon4') {
     $INFO_LOGINS = get_carbon4();
   }
+  elsif ($from eq 'carbon5') {
+    $INFO_LOGINS = get_carbon5();
+  }
   elsif (defined(\&{$from})) {
     if($debug > 4) {
       print "Custom function: $from\n";
@@ -225,6 +236,7 @@ if ($db) {
       DB_NAME
       DB_USER
       DB_PASSWORD
+      DB_PATH
       ABILLS_DB
 
   Returns:
@@ -242,6 +254,7 @@ sub db_connect {
   my $dbuser = $attr->{DB_USER} || "root";
   my $dbpasswd = $attr->{DB_PASSWORD} || "";
   my $dbtype = $attr->{DB_TYPE} || "mysql"; #Pg
+  my $dbpath = $attr->{DB_PATH} || ""; #carbon
 
   if ($attr->{ABILLS_DB}) {
     if (!-f '/usr/abills/libexec/config.pl') {
@@ -272,7 +285,12 @@ ABillS not installed\n";
     DBD::ODBC->import();
 
     if ($from eq 'carbon4') {
-      $_db = get_connection_to_firebird_host($dbhost, '/var/db/ics_main.gdb', $dbpasswd);
+      if (!$dbpath) {$dbpath = '/var/db/ics_main.gdb';}
+      $_db = get_connection_to_firebird_host($dbhost, $dbpath, $dbpasswd);
+    }
+    elsif ($from eq 'carbon5') {
+      if (!$dbpath) {$dbpath = '/var/db/billing.gdb';}
+      $_db = get_connection_to_firebird_host($dbhost, $dbpath, $dbpasswd);
     }
     else {
       $_db = DBI->connect("dbi:$dbtype:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
@@ -1341,10 +1359,31 @@ sub get_freenibs_users {
 }
 
 #**********************************************************
+=head2 all_columns($logins_info) - Returns all used columns 
+
+  Arguments:
+    $logins_info (HASH_REF)
+
+  Returns: 
+    @columns
+=cut
+#**********************************************************
+sub all_columns {
+  my ($logins_info) = @_;
+  my %columns;
+  foreach my $login (values %$logins_info){
+    foreach(keys %$login){
+     $columns{$_}=1;
+    }
+  };
+  return (sort keys %columns);
+}
+
+#**********************************************************
 =head2 show($logins_info)
 
   Arguments:
-    $logis_info (HASH_REF)
+    $logins_info (HASH_REF)
 
 =cut
 #**********************************************************
@@ -1370,7 +1409,7 @@ sub show {
 
   my $login = $titles[0];
 
-  @titles = sort keys %{$logins_info->{$login}};
+  @titles = all_columns($logins_info);
 
   if ($argv->{LOGIN2UID} && !$logins_info->{$login}{'1.UID'}) {
     push @titles, '1.UID';
@@ -1410,7 +1449,10 @@ sub show {
         }
 
         next if ($exaption{$column_title});
-        my $value = $logins_info->{$login_}{$column_title} || q{};
+        my $value = q{};
+        if (defined($logins_info->{$login_}{$column_title})) {
+          $value = $logins_info->{$login_}{$column_title};
+        }
         if ($argv->{win2utf}) {
           $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
         }
@@ -1649,6 +1691,8 @@ ABillS Migration system Version: $VERSION
                            	traffpro
                             stargazer    - MySQL DB
                             stargazer_pg - stargazer Postgree DB
+                            carbon4
+                            carbon5
                             lms
                             lms_nodes (IP, MAC adresses for lms users)
                             odbc
@@ -1667,6 +1711,7 @@ ABillS Migration system Version: $VERSION
     DB_PASSWORD         -
     DB_CHARSET          -
     DB_NAME             -
+    DB_PATH             - Path to DB file for carbon
     HTML                - Show export file in HTML FORMAT
     win2utf             - Convert info from win1251 to utf8
     help                - This help
@@ -3127,39 +3172,259 @@ sub get_carbon4 {
     }
   }
 
-  # Show result
-  my $divider = "\t";
+  # Form result
+  my %result_hash;
   foreach my $user_row (@{$users_list}) {
 
-    # print login, password
     my $login = $user_row->{LOGIN};
     my $password = $user_row->{PSW} || $DEFAULT_PASSWORD;
+    if ($password =~ /^\0+$/){
+      $password = $DEFAULT_PASSWORD;
+    }
 
     next if ($user_row->{LOGIN} =~ /\d+\-\d+/);
 
     delete $user_row->{LOGIN};
     delete $user_row->{PSW};
 
-    my @attributes_row = ();
+    my %attributes_hash;
 
-    # Login and password are going as first two columns
-    push(@attributes_row, ($login, $password));
+    $attributes_hash{LOGIN} = $login;
+    $attributes_hash{PASSWORD} = $password;
 
-    # Saving all other attributes in sorted by attr order
-    foreach my $attribute_name (sort keys %fields) {
+    # Saving all other attributes
+    foreach my $attribute_name (keys %fields) {
       my $attr_value = $user_row->{ $fields{$attribute_name} };
       next if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/);
-      push(@attributes_row, "$attribute_name=" . '"' . $attr_value . '"');
+      $attributes_hash{$attribute_name}=$attr_value;
     }
 
-    # Show result
-    print join($divider, @attributes_row);
+    $result_hash{$login} = \%attributes_hash;
+  }
+  return \%result_hash;
+}
 
-    # Next line
-    print "\n";
+#**********************************************************
+=head2 convert_date() - Converts date from different formats to YYYY-MM-DD
+
+=cut
+#**********************************************************
+sub convert_date{
+  my ($date) = @_;
+  my $year, my $month, my $day;
+  if($date =~ /^(\d{4})-(\d{2})-(\d{2})$/){
+    ($year, $month, $day) = ($1, $2, $3);
+  }
+  if($date =~ /^(\d{2})\.(\d{2})\.(\d{4})$/){
+    ($year, $month, $day) = ($3, $2, $1);
+  }
+  if($date =~ /^(\d{2})\.(\d{2})\.(\d{2})$/){
+    ($year, $month, $day) = ($3, $2, $1);
+    if ($year > 30){ #TODO
+      $year += 1900;
+    }else{
+  $year += 2000;
+    }
+  }
+  if(defined($year)){
+    return $year."-".$month."-".$day;
+  }
+  else{
+    return $date;
   }
 
-  exit;
+}
+
+#**********************************************************
+=head2 get_carbon5() - Import from Carbon 5
+
+=cut
+#**********************************************************
+sub get_carbon5 {
+  my %fields = (
+    'LOGIN'            => 'LOGIN',
+    'PASSWORD'         => 'GEN_PWD',
+    '1.ACTIVATE'       => 'ACTIVATE',
+    '3.CONTRACT_ID'    => 'CONTRACT_NUMBER',
+    '3.CONTRACT_DATE'  => 'CONTRACT_DATE',
+    '3.FIO'            => 'NAME',
+    '3._COUNTRY'       => 'COUNTRY',
+    '3.CITY'           => 'CITY',
+    '3._REGION'        => 'REGION',
+    '3.ADDRESS_STREET' => 'STREET',
+    '3.ADDRESS_BUILD'  => 'S_NUMBER',
+
+    '3.PHONE'          => 'SMS',
+    '3.EMAIL'          => 'EMAIL',
+    '4.TP_NUM'         => 'TP_NUM',
+    '5.SUM'            => 'OSTATOK',
+    '3.PASPORT_DATE'   => 'PASPORT_DATE',
+    '3.PASPORT_GRANT'  => 'PASPORT_GRANT',
+    '3.PASPORT_NUM'    => 'PASPORT_NUM',
+    '4.LOGIN'          => 'LOGIN',
+    '4.PASSWORD'       => 'GEN_PWD',
+    '4.IP'             => 'IP',
+    '11.IPTV_LOGIN'    => 'IPTV_LOGIN',
+    '11.IPTV_PASSWORD' => 'IPTV_PASSWORD',
+    '1.REDUCTION'      => 'LOYALTY',
+
+    '12.TP_ID'         => 'TP_ID',
+    '12.TP_NAME'       => 'TP_NAME',
+    '12.TP_SUM'        => 'TP_SUM',
+
+
+    #'1.GID'            => 'PARID',
+    #'1.DISABLE'        => 'DISABLED',
+
+
+  );
+
+  #  my %fields_rev = reverse(%fields);
+  #  my $fields_list = "login, " . join(", \n", values(%fields));
+
+  my %attribute_type_id_for = (
+    PHONE        => 1,
+    PASPORT_NUM  => 13,
+
+    #    PASPORT_SER => 15,
+    PASPORT_BY   => 16,
+    PASPORT_DATE => 17,
+  );
+
+  my $sql = 'SELECT A.ID,
+            (SELECT FIRST(1) U.LOGIN FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL),
+            (SELECT FIRST(1) U.GEN_PWD FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL),
+            A.CONTRACT_NUMBER,
+            CAST(A.CREATE_DATE as date) AS CONTRACT_DATE,
+            A.NAME,
+            H.COUNTRY,H.CITY,H.REGION,H.STREET,H.S_NUMBER,H.S_LITER,
+            A.SMS,
+            A.EMAIL,
+            round((aa.ostatok+aa.debit-aa.credit) / cast((10000000000) as numeric(18,5)), 2) AS OSTATOK,
+            T.ID AS TP_NUM,
+            L.NAME AS LOYALTY,
+            (select AV.ATTRIBUTE_VALUE as "PASPORT_DATE"
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 17
+            and AV.ABONENT_ID = A.ID),
+            (select AV.ATTRIBUTE_VALUE as "PASPORT_GRANT"
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 16
+            and AV.ABONENT_ID = A.ID),
+            (select AV.ATTRIBUTE_VALUE
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 14
+            and AV.ABONENT_ID = A.ID)||
+            (select AV.ATTRIBUTE_VALUE
+            from ATTRIBUTE_VALUES AV
+            where AV.ATTRIBUTE_ID = 13
+            and AV.ABONENT_ID = A.ID) as "PASPORT_NUM",
+            (SELECT FIRST(1) UF_IP2STRING(IP) FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL) AS IP,
+            (SELECT NAME FROM IP_PULL WHERE PULL_ID = (
+             SELECT FIRST(1) PULL_ID FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NOT NULL)) AS IP_PULL,
+            (SELECT MIN(NEXT_DATE) FROM USERS_USLUGA WHERE ABONENT_ID=A.ID AND NEXT_DATE > current_timestamp)-30 AS ACTIVATE,--
+            (SELECT FIRST(1) U.LOGIN FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NULL) AS IPTV_LOGIN,
+            (SELECT FIRST(1) U.GEN_PWD FROM USERS AS U WHERE U.ABONENT_ID=A.ID AND U.IP IS NULL) AS IPTV_PASSWORD,
+
+            (SELECT FIRST(1) u.ID FROM USLUGA u
+            LEFT JOIN USERS_USLUGA uu ON uu.ABONENT_ID = a.ID
+            LEFT JOIN TARIF_USERS_USLUGA tuu ON u.ID = tuu.USLUGA_ID
+            LEFT JOIN TARIF t ON tuu.TARIF_ID = t.ID
+            WHERE u.ID = uu.USLUGA_ID AND
+            uu.DELETED = 0 AND UU.ENABLED = 1 AND
+            t.ID IS NULL) AS TP_ID,
+            (SELECT FIRST(1) u.NAME FROM USLUGA u
+            LEFT JOIN USERS_USLUGA uu ON uu.ABONENT_ID = a.ID
+            LEFT JOIN TARIF_USERS_USLUGA tuu ON u.ID = tuu.USLUGA_ID
+            LEFT JOIN TARIF t ON tuu.TARIF_ID = t.ID
+            WHERE u.ID = uu.USLUGA_ID AND
+            uu.DELETED = 0 AND UU.ENABLED = 1 AND
+            t.ID IS NULL) AS TP_NAME,
+            (SELECT FIRST(1) round((u.SUMMA) / cast((10000000000) as numeric(18,5)), 2) FROM USLUGA u
+            LEFT JOIN USERS_USLUGA uu ON uu.ABONENT_ID = a.ID
+            LEFT JOIN TARIF_USERS_USLUGA tuu ON u.ID = tuu.USLUGA_ID
+            LEFT JOIN TARIF t ON tuu.TARIF_ID = t.ID
+            WHERE u.ID = uu.USLUGA_ID AND
+            uu.DELETED = 0 AND UU.ENABLED = 1 AND
+            t.ID IS NULL) AS TP_SUM
+
+            FROM ABONENTS AS A
+            LEFT JOIN HOMES AS H on H.ID = A.HOME_ID
+            left join ADMIN_ACCOUNTS AA on AA.ID=A.ACCOUNT_ID
+            left join TARIF T on T.ID = A.TARIF_ID
+            LEFT JOIN LOYALTYS L on L.ID = A.LOYALTY_ID';
+
+  #print $sql;
+  if ($DEBUG > 4) {
+    print $sql;
+    return 0;
+  }
+  elsif ($DEBUG > 0) {
+    print "$sql\n";
+  }
+  my DBI::st $q = $db->prepare($sql);
+  $q->execute();
+
+  my $users_list = $q->fetchall_hashref('ID');
+
+  my %without_logins = ();
+  foreach my $user (values %{$users_list}) {
+
+    # Translating carbon 'ENABLED' to abills 'disabled' attr
+    $user->{DISABLED} = !$user->{ENABLED};
+
+    if (!$user->{LOGIN}) {
+      $without_logins{ $user->{ID} } = $user;
+
+      #      print "!!! User $user->{ID}( $user->{IDENTIFY}  ) don't have login. \n Will not be included in results \n";
+      delete $users_list->{ $user->{ID} };
+    }
+  }
+
+  $users_list = [values %{$users_list}];
+
+  #foreach my $user (@{$users_list}) {
+  #  if (exists $without_logins{ $user->{PARID} }) {
+  #
+  #    #      print "$user->{IDENTIFY} is probably a group \n";
+  #  }
+  #}
+
+  # Form result
+  my %result_hash;
+  foreach my $user_row (@{$users_list}) {
+
+    my $login = $user_row->{LOGIN};
+    my $password = $user_row->{PSW} || $DEFAULT_PASSWORD;
+    if ($password =~ /^\0+$/){
+      $password = $DEFAULT_PASSWORD;
+    }
+
+    if (($user_row->{LOGIN} =~ /\d+\-\d+/)||($user_row->{LOGIN} =~ /^\0/)){
+        next;
+    }
+
+    delete $user_row->{LOGIN};
+    delete $user_row->{PSW};
+
+    my %attributes_hash;
+
+    $attributes_hash{LOGIN} = $login;
+    $attributes_hash{PASSWORD} = $password;
+
+    # Saving all other attributes
+    foreach my $attribute_name (keys %fields) {
+      my $attr_value = $user_row->{ $fields{$attribute_name} };
+      if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/ || $attr_value =~ /^\0/){
+	    next;
+	  }
+	  if($attribute_name eq '3.PASPORT_DATE') {$attr_value=convert_date($attr_value);}
+      $attributes_hash{$attribute_name}=$attr_value;
+    }
+
+    $result_hash{$login} = \%attributes_hash;
+  }
+  return \%result_hash;
 }
 
 #**********************************************************
