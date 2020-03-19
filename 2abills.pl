@@ -813,12 +813,18 @@ sub get_file {
       #Tim quote
       $cels[$i] =~ s/^[\'\"]//;
       $cels[$i] =~ s/[\'\"]$//;
+      my $field_name =  $FILE_FIELDS[$i] ;
+      if($tmp_hash{ $field_name }) {
+        $tmp_hash{ $field_name } .= $cels[$i];
+      }
+      else {
+        $tmp_hash{ $field_name } = $cels[$i];
+      }
 
-      $tmp_hash{ $FILE_FIELDS[$i] } = $cels[$i];
-      print "$i/$FILE_FIELDS[$i] - $cels[$i]\n" if ($DEBUG > 0);
+      print "$i/$field_name - $cels[$i]\n" if ($DEBUG > 0);
 
-      if ($tmp_hash{ $FILE_FIELDS[$i] } =~ /^(\d{2})[-.](\d{2})[-.](\d{4})$/) {
-        $tmp_hash{ $FILE_FIELDS[$i] } = "$3-$2-$1";
+      if ($tmp_hash{ $field_name } =~ /^(\d{2})[-.](\d{2})[-.](\d{4})$/) {
+        $tmp_hash{ $field_name } = "$3-$2-$1";
       }
 
       if ($FILE_FIELDS[$i] eq '3.ADDRESS_STREET') {
@@ -831,30 +837,37 @@ sub get_file {
         #        #exit;
         #      }
       }
-      elsif ($FILE_FIELDS[$i] eq '5.SUM') {
-        $tmp_hash{ $FILE_FIELDS[$i] } =~ s/,/./g;
+      elsif ($field_name eq '5.SUM') {
+        $tmp_hash{ $field_name } =~ s/,/./g;
         if ($EXCHANGE_RATE > 0) {
-          $tmp_hash{ $FILE_FIELDS[$i] } = $tmp_hash{ $FILE_FIELDS[$i] } * $EXCHANGE_RATE;
+          $tmp_hash{ $field_name } = $tmp_hash{ $field_name } * $EXCHANGE_RATE;
         }
       }
-      elsif ($FILE_FIELDS[$i] eq '4.TP') {
-        if (!$TARIFS_HASH{ $tmp_hash{ $FILE_FIELDS[$i] } }) {
+      elsif ($field_name eq '4.TP') {
+
+        $tmp_hash{ $field_name } =~ /(\d+)/;
+        $tmp_hash{ $field_name } = $1;
+        if (!$TARIFS_HASH{ $tmp_hash{ $field_name } }) {
           $TP_ID += 10;
-          $TARIFS_HASH{ $tmp_hash{ $FILE_FIELDS[$i] } } = $TP_ID;
+          $TARIFS_HASH{ $tmp_hash{ $field_name } } = $TP_ID;
         }
 
-        $tmp_hash{'4.TP_ID'} = $TARIFS_HASH{ $tmp_hash{ $FILE_FIELDS[$i] } };
+        $tmp_hash{'4.TP_ID'} = $TARIFS_HASH{ $tmp_hash{ $field_name } };
       }
-      elsif ($FILE_FIELDS[$i] eq '3.CONTRACT_ID') {
-        $tmp_hash{ $FILE_FIELDS[$i] } =~ s/\-//g;
+      elsif ($field_name eq '3.CONTRACT_ID') {
+        $tmp_hash{ $field_name } =~ s/\-//g;
       }
-      elsif ($FILE_FIELDS[$i] eq '3.PHONE') {
-        $COMMENTS .= "PHONE: " . $tmp_hash{ $FILE_FIELDS[$i] };
+      elsif ($field_name eq '4.IP') {
+        $tmp_hash{ $field_name } =~ /([0-9a-f]{1,3}\.[0-9a-f]{1,3}\.[0-9a-f]{1,3}\.[0-9a-f]{1,3})/g;
+        $tmp_hash{ $field_name } = $1;
+      }
+      elsif ($field_name eq '3.PHONE') {
+        $COMMENTS .= "PHONE: " . $tmp_hash{ $field_name };
 
-        if ($tmp_hash{ $FILE_FIELDS[$i] } =~ s/_(.+)$//) {
+        if ($tmp_hash{ $field_name } =~ s/_(.+)$//) {
           $cel_phone .= $1;
         }
-        $tmp_hash{ $FILE_FIELDS[$i] } =~ s/,//g if ($tmp_hash{ $FILE_FIELDS[$i] });
+        $tmp_hash{ $field_name } =~ s/,//g if ($tmp_hash{ $field_name });
 
         # print "$tmp_hash{$FILE_FIELDS[$i]} / $tmp_hash{'3._cel_phone'}\n";
       }
