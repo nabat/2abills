@@ -29,8 +29,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.88
-  UPDATE: 20191011
+  VERSION: 0.90
+  UPDATE: 20200403
 
 =cut
 
@@ -843,16 +843,24 @@ sub get_file {
           $tmp_hash{ $field_name } = $tmp_hash{ $field_name } * $EXCHANGE_RATE;
         }
       }
+      elsif($field_name eq '4.NAS_PORT') {
+        my ($nas_ip, $port)=split(/#/, $tmp_hash{ $field_name });
+        $tmp_hash{'4.NAS_IP'} = $nas_ip;
+        $tmp_hash{'4.PORT'} = $port;
+      }
       elsif ($field_name eq '4.TP') {
 
-        $tmp_hash{ $field_name } =~ /(\d+)/;
-        $tmp_hash{ $field_name } = $1;
+#        if($tmp_hash{ $field_name } =~ /(\d+)/) {
+#          $tmp_hash{ $field_name } = $1;
+#        }
         if (!$TARIFS_HASH{ $tmp_hash{ $field_name } }) {
           $TP_ID += 10;
           $TARIFS_HASH{ $tmp_hash{ $field_name } } = $TP_ID;
         }
 
-        $tmp_hash{'4.TP_ID'} = $TARIFS_HASH{ $tmp_hash{ $field_name } };
+        $tmp_hash{'4.TP_NUM'} = $TARIFS_HASH{ $tmp_hash{ $field_name } };
+        $tmp_hash{'4.TP_NAME'} = $tmp_hash{ $field_name };
+
       }
       elsif ($field_name eq '3.CONTRACT_ID') {
         $tmp_hash{ $field_name } =~ s/\-//g;
@@ -1532,7 +1540,7 @@ sub show {
       }
 
       if ($argv->{SKIP_ERROR_PARAM}) {
-        $output .= "SKIP_ERRORS=1\t4.INTERNET_SKIP_FEE=1\t";
+        $output .= "SKIP_ERRORS=1\t4.INTERNET_SKIP_FEE=1\t9.SKIP_FEE\t";
       }
 
       if ($argv->{ADD_PARAMS}) {
