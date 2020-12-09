@@ -29,8 +29,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.90
-  UPDATE: 20200403
+  VERSION: 0.91
+  UPDATE: 20200422
 
 =cut
 
@@ -1456,6 +1456,7 @@ sub show {
 
     next if (!$login_);
     print "$login_\n" if ($DEBUG > 0);
+    $logins_info->{$login_}{'LOGIN'} =~ s/\s//g;
 
     if ($FORMAT eq 'html') {
       $output .= "<tr><td>$logins_info->{$login_}{'LOGIN'}</td><td>$logins_info->{$login_}{'PASSWORD'}</td>";
@@ -1483,6 +1484,7 @@ sub show {
       $output .= "</tr>\n";
     }
     else {
+      
       $output .= "$logins_info->{$login_}{'LOGIN'}\t" . (($logins_info->{$login_}{'PASSWORD'}) ? $logins_info->{$login_}{'PASSWORD'} : '-') . "\t";
 
       foreach my $column_title (@titles) {
@@ -1495,6 +1497,10 @@ sub show {
 
         if ($column_title eq '4.TP_ID' && $TP_MIGRATION{ $value }) {
           $value = $TP_MIGRATION{ $value };
+        }
+
+        if ($column_title =~ /CONTRACT_DATE|REGISTRATION/) {
+          $value = _date_convert($value);
         }
 
         #Address full
@@ -3700,5 +3706,20 @@ sub get_custom_1 {
   return \%logins_hash;
 }
 
+#*********************************************************
+=head2 _date_convert($input) - Date convert
+
+=cut
+#*********************************************************
+sub _date_convert {
+  my ($input) = @_;
+  my $date = $input;
+
+  if($date =~ /^(\d{4}\-\d{2}\-\d{2})/) {
+    $date = $1;
+  }
+
+  return $date;
+}
 
 1
