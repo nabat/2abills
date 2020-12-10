@@ -7,6 +7,7 @@ use warnings;
 
   to ABillS migrations
 
+   ebs (ExpertBilling)
    FreeNIBS
    Mabill
    UTM4
@@ -29,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.91
-  UPDATE: 20200422
+  VERSION: 0.92
+  UPDATE: 20201210
 
 =cut
 
@@ -40,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.88;
+my $VERSION = 0.92;
 our (%conf);
 
 #DB information
@@ -209,6 +210,9 @@ if ($from) {
   }
   elsif ($from eq 'carbon5') {
     $INFO_LOGINS = get_carbon5();
+  }
+  elsif (defined(\&{ 'get_' . $from } )) {
+    &{\&{'get_'.$from}}();
   }
   elsif (defined(\&{$from})) {
     if($debug > 4) {
@@ -699,6 +703,150 @@ sub get_abills {
 }
 
 #**************************************************
+=head2 get_ebs()
+
+=cut
+#**************************************************
+sub get_ebs {
+  # |  | systemuser_id | entrance_code | private_passport_number | city_id |
+  #   | promise_summ | allow_block_after_summ | block_after_summ | promise_days | promise_min_ballance | account_group_id
+  #   | birthday | extra_fields | bonus_ballance | passportdislocate | disable_notifications
+
+  my $main_table = 'billservice_account';
+  my %fields = (
+
+    #DECODE(u.password, 'test12345678901234567890') AS password,
+    #pi.fio as fio,
+    #if(company.id IS NULL,b.deposit,cb.deposit) AS deposit,
+    #if(u.company_id=0, u.credit, if (u.credit=0, company.credit, u.credit)) AS credit,
+    #u.disable as disable,
+    #u.company_id as company_id,
+    #u.activate,
+    #u.expire,
+    #pi.phone,
+    #pi.email,
+    #pi.country_id,
+    #pi.address_street,
+    #pi.address_build,
+    #pi.address_flat,
+    #pi.comments,
+    #pi.contract_id,
+    #pi.contract_date,
+    #pi.contract_sufix,
+    #pi.pasport_num,
+    #pi.pasport_date,
+    #pi.pasport_grant,
+    #pi.zip,
+    #pi.city,
+    #dv.tp_id,
+    #INET_NTOA(dv.ip) AS ip,
+    #dv.CID,
+    #u.reduction,
+    #u.gid,
+    #u.registration,
+    #pi.comments
+
+    'LOGIN'            => 'username',
+    'PASSWORD'         => 'password',
+    # '1.ACTIVATE'       => 'activate',
+    # '1.EXPIRE'         => 'expire',
+    # '1.COMPANY_ID'     => 'company_id',
+    '1.CREDIT'         => 'credit',
+    '1.GID'            => 'account_group_id',
+    '1.DELETED'        => 'deleted',
+    # '1.REDUCTION'      => 'reduction',
+    '1.REGISTRATION'   => 'created',
+    '1.DISABLE'        => 'status',
+    '3.ADDRESS_FLAT'   => 'room',
+    '3.DISTRICT'       => 'region',
+    '3.ADDRESS_STREET' => 'street',
+    '3.CITY'           => 'city',
+    '3.ZIP'            => 'postcode',
+    '3.ADDRESS_BUILD'  => 'house',
+    '3.FLOOR'          => 'house_bulk',
+    '3.ENTRANCE'       => 'entrance',
+
+    # '3.COUNTRY_ID'     => 'country_id',
+    '3.COMMENTS'       => 'comment',
+    '3.CONTRACT_ID'    => 'contract',
+    # '3.CONTRACT_DATE'  => 'contract_date',
+    # '3.CONTRACT_SUFIX' => 'contract_sufix',
+    '3.EMAIL'          => 'email',
+    '3.FIO'            => 'fullname',
+    #'3.FIO2'           => 'last_name',
+    #'3.FIO3'           => 'first_name',
+    '3.PHONE'          => 'phone_m,contactperson_phone,phone_h',
+    '3.PASSPORT_NUM'   => 'passport',
+    '3.PASSPORT_DATE'  => 'passport_date',
+    '3.PASSPORT_GRANT' => 'passport_given',
+
+    # '4.CID'            => 'CID',
+    # '4.FILTER_ID'      => 'filter_id',
+    # '4.IP'             => 'ip',
+    '4.VLAN'           => 'vlan',
+    #
+    # #  '4.NETMASK'        => '\'255.255.255.255\'',
+    # #  '4.SIMULTANEONSLY' => 'simultaneous_use',
+    # #  '4.SPEED'          => 'speed',
+    # '4.TP_ID'          => 'tp_id',
+    #
+    # #  '4.CALLBACK'       => 'allow_callback',
+    #
+    '5.SUM'            => 'ballance',
+    '5.DESCRIBE'       => "'Migration'",
+
+    #  '5.ER'             => undef,
+    #  '5.EXT_ID'         => undef,
+
+    #  '6.USERNAME'       => 'email',
+    #  '6.DOMAINS_SEL'     => $email_domain_id || 0,
+    #  '6.COMMENTS'        => '',
+    #  '6.MAILS_LIMIT'	    => 0,
+    #  '6.BOX_SIZE'	      => 0,
+    #  '6.ANTIVIRUS'	      => 0,
+    #  '6.ANTISPAM'	      => 0,
+    #  '6.DISABLE'	        => 0,
+    #  '6.EXPIRE'	        => undef,
+    #  '6.PASSWORD'	      => 'email_pass',
+  );
+
+  my %fields_rev = reverse(%fields);
+  my $fields_list = "user, " . join(", \n", values(%fields));
+
+  my $sql = "SELECT
+     $fields_list
+   FROM $main_table
+   GROUP BY $main_table.id";
+  print "$sql\n" if ($DEBUG > 0);
+
+  my DBI $q = $db->prepare($sql);
+  $q->execute();
+  my $query_fields = $q->{NAME};
+  #my $output       = '';
+  my %logins_hash = ();
+
+  while (my @row = $q->fetchrow_array()) {
+    my $LOGIN = $row[0];
+    $logins_hash{$LOGIN}{LOGIN} = $row[0];
+    for (my $i = 1; $i < $#row; $i++) {
+      if ($DEBUG > 3) {
+        print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
+      }
+      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
+    }
+
+    #Extended params
+    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
+      $logins_hash{$LOGIN}{$k} = $v;
+    }
+
+  }
+
+  undef($q);
+  return \%logins_hash;
+}
+
+#**************************************************
 =head2 utm5cards()
 
 =cut
@@ -850,9 +998,9 @@ sub get_file {
       }
       elsif ($field_name eq '4.TP') {
 
-#        if($tmp_hash{ $field_name } =~ /(\d+)/) {
-#          $tmp_hash{ $field_name } = $1;
-#        }
+        #        if($tmp_hash{ $field_name } =~ /(\d+)/) {
+        #          $tmp_hash{ $field_name } = $1;
+        #        }
         if (!$TARIFS_HASH{ $tmp_hash{ $field_name } }) {
           $TP_ID += 10;
           $TARIFS_HASH{ $tmp_hash{ $field_name } } = $TP_ID;
@@ -1326,7 +1474,7 @@ sub get_freenibs_users {
 
   if ($attr->{MABILL}) {
     $fields{'4.SPEED'} = 'speed';
-      $fields{'6.USERNAME'} = 'email', $fields{'6.DOMAINS_SEL'} = $EMAIL_DOMAIN_ID || 0;
+    $fields{'6.USERNAME'} = 'email', $fields{'6.DOMAINS_SEL'} = $EMAIL_DOMAIN_ID || 0;
     $fields{'PASSWORD'} = 'if(crypt_method=1, email_pass, password)';
 
     #  '6.COMMENTS'        => '',
@@ -1394,7 +1542,7 @@ sub all_columns {
   my %columns;
   foreach my $login (values %$logins_info){
     foreach(keys %$login){
-     $columns{$_}=1;
+      $columns{$_}=1;
     }
   };
   return (sort keys %columns);
@@ -1484,7 +1632,7 @@ sub show {
       $output .= "</tr>\n";
     }
     else {
-      
+
       $output .= "$logins_info->{$login_}{'LOGIN'}\t" . (($logins_info->{$login_}{'PASSWORD'}) ? $logins_info->{$login_}{'PASSWORD'} : '-') . "\t";
 
       foreach my $column_title (@titles) {
@@ -3250,7 +3398,7 @@ sub convert_date{
     if ($year > 30){ #TODO
       $year += 1900;
     }else{
-  $year += 2000;
+      $year += 2000;
     }
   }
   if(defined($year)){
@@ -3428,7 +3576,7 @@ sub get_carbon5 {
     }
 
     if (($user_row->{LOGIN} =~ /\d+\-\d+/)||($user_row->{LOGIN} =~ /^\0/)){
-        next;
+      next;
     }
 
     delete $user_row->{LOGIN};
@@ -3443,9 +3591,9 @@ sub get_carbon5 {
     foreach my $attribute_name (keys %fields) {
       my $attr_value = $user_row->{ $fields{$attribute_name} };
       if (!defined($attr_value) || $attr_value eq '' || $attr_value !~ /[0-9a-zA-Zа-яА-Я_]+/ || $attr_value =~ /^\0/){
-	    next;
-	  }
-	  if($attribute_name eq '3.PASPORT_DATE') {$attr_value=convert_date($attr_value);}
+        next;
+      }
+      if($attribute_name eq '3.PASPORT_DATE') {$attr_value=convert_date($attr_value);}
       $attributes_hash{$attribute_name}=$attr_value;
     }
 
@@ -3689,8 +3837,8 @@ sub get_custom_1 {
       }
 
       #if(! $fields{ $key }) {
-        #print "NO field for key '$key'\n";
-        #exit;
+      #print "NO field for key '$key'\n";
+      #exit;
       #}
 
       $logins_hash{$LOGIN}{ $fields{ $key } || '-' } = $row->{$key} || q{};
@@ -3721,5 +3869,7 @@ sub _date_convert {
 
   return $date;
 }
+
+
 
 1
