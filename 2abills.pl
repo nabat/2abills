@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.92
-  UPDATE: 20201210
+  VERSION: 0.94
+  UPDATE: 20201216
 
 =cut
 
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.92;
+my $VERSION = 0.94;
 our (%conf);
 
 #DB information
@@ -212,7 +212,7 @@ if ($from) {
     $INFO_LOGINS = get_carbon5();
   }
   elsif (defined(\&{ 'get_' . $from } )) {
-    &{\&{'get_'.$from}}();
+    $INFO_LOGINS = &{\&{'get_'.$from}}();
   }
   elsif (defined(\&{$from})) {
     if($debug > 4) {
@@ -712,9 +712,9 @@ sub get_ebs {
   #   | promise_summ | allow_block_after_summ | block_after_summ | promise_days | promise_min_ballance | account_group_id
   #   | birthday | extra_fields | bonus_ballance | passportdislocate | disable_notifications
 
+
   my $main_table = 'billservice_account';
   my %fields = (
-
     #DECODE(u.password, 'test12345678901234567890') AS password,
     #pi.fio as fio,
     #if(company.id IS NULL,b.deposit,cb.deposit) AS deposit,
@@ -745,45 +745,44 @@ sub get_ebs {
     #u.gid,
     #u.registration,
     #pi.comments
-
-    'LOGIN'            => 'username',
-    'PASSWORD'         => 'password',
+    'LOGIN'            => 'a.username',
+    'PASSWORD'         => 'a.password',
     # '1.ACTIVATE'       => 'activate',
     # '1.EXPIRE'         => 'expire',
     # '1.COMPANY_ID'     => 'company_id',
-    '1.CREDIT'         => 'credit',
-    '1.GID'            => 'account_group_id',
-    '1.DELETED'        => 'deleted',
+    '1.CREDIT'         => 'a.credit',
+    '1.GID'            => 'a.account_group_id',
+    '1.DELETED'        => 'a.deleted',
     # '1.REDUCTION'      => 'reduction',
-    '1.REGISTRATION'   => 'created',
-    '1.DISABLE'        => 'status',
-    '3.ADDRESS_FLAT'   => 'room',
-    '3.DISTRICT'       => 'region',
-    '3.ADDRESS_STREET' => 'street',
-    '3.CITY'           => 'city',
-    '3.ZIP'            => 'postcode',
-    '3.ADDRESS_BUILD'  => 'house',
-    '3.FLOOR'          => 'house_bulk',
-    '3.ENTRANCE'       => 'entrance',
+    '1.REGISTRATION'   => 'a.created',
+    '1.DISABLE'        => 'a.status',
+    '3.ADDRESS_FLAT'   => 'a.room',
+    '3.DISTRICT'       => 'a.region',
+    '3.ADDRESS_STREET' => 'a.street',
+    '3.CITY'           => 'a.city',
+    '3.ZIP'            => 'a.postcode',
+    '3.ADDRESS_BUILD'  => 'a.house',
+    '3.FLOOR'          => 'a.house_bulk',
+    '3.ENTRANCE'       => 'a.entrance',
 
     # '3.COUNTRY_ID'     => 'country_id',
-    '3.COMMENTS'       => 'comment',
-    '3.CONTRACT_ID'    => 'contract',
+    '3.COMMENTS'       => 'a.comment',
+    '3.CONTRACT_ID'    => 'a.contract',
     # '3.CONTRACT_DATE'  => 'contract_date',
     # '3.CONTRACT_SUFIX' => 'contract_sufix',
-    '3.EMAIL'          => 'email',
-    '3.FIO'            => 'fullname',
+    '3.EMAIL'          => 'a.email',
+    '3.FIO'            => 'a.fullname',
     #'3.FIO2'           => 'last_name',
     #'3.FIO3'           => 'first_name',
-    '3.PHONE'          => 'phone_m,contactperson_phone,phone_h',
-    '3.PASSPORT_NUM'   => 'passport',
-    '3.PASSPORT_DATE'  => 'passport_date',
-    '3.PASSPORT_GRANT' => 'passport_given',
+    '3.PHONE'          => 'a.phone_m', #,contactperson_phone,phone_h',
+    '3.PASSPORT_NUM'   => 'a.passport',
+    '3.PASSPORT_DATE'  => 'a.passport_date',
+    '3.PASSPORT_GRANT' => 'a.passport_given',
 
     # '4.CID'            => 'CID',
     # '4.FILTER_ID'      => 'filter_id',
     # '4.IP'             => 'ip',
-    '4.VLAN'           => 'vlan',
+    '4.VLAN'           => 'a.vlan',
     #
     # #  '4.NETMASK'        => '\'255.255.255.255\'',
     # #  '4.SIMULTANEONSLY' => 'simultaneous_use',
@@ -792,8 +791,8 @@ sub get_ebs {
     #
     # #  '4.CALLBACK'       => 'allow_callback',
     #
-    '5.SUM'            => 'ballance',
-    '5.DESCRIBE'       => "'Migration'",
+    '5.SUM'            => 'a.ballance',
+    #'5.DESCRIBE'       => "'Migration'",
 
     #  '5.ER'             => undef,
     #  '5.EXT_ID'         => undef,
@@ -808,15 +807,31 @@ sub get_ebs {
     #  '6.DISABLE'	        => 0,
     #  '6.EXPIRE'	        => undef,
     #  '6.PASSWORD'	      => 'email_pass',
+    '3.TP_NUM'         => 'ba.tarif_id AS tp_id',
+    '3.TP_NAME'        => 'tp.name AS tp_name',
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "user, " . join(", \n", values(%fields));
+  my $fields_list = "username, " . join(", \n", values(%fields));
+
+  foreach my $key (keys %fields_rev) {
+    $key =~ /([a-z\_0-9]+)$/i;
+    $fields_rev{$1}=$fields_rev{$key};
+
+  }
 
   my $sql = "SELECT
      $fields_list
-   FROM $main_table
-   GROUP BY $main_table.id";
+        FROM billservice_account a
+        LEFT JOIN billservice_accounttarif ba ON (a.id=ba.account_id)
+        LEFT JOIN billservice_tariff tp ON (ba.tarif_id=tp.id)
+        WHERE
+     tp.id <> 28
+     AND a.status IN (1,4)
+     AND a.deleted IS NULL
+     GROUP BY a.id, ba.tarif_id, tp.name
+  ;";
+
   print "$sql\n" if ($DEBUG > 0);
 
   my DBI $q = $db->prepare($sql);
@@ -825,21 +840,26 @@ sub get_ebs {
   #my $output       = '';
   my %logins_hash = ();
 
-  while (my @row = $q->fetchrow_array()) {
-    my $LOGIN = $row[0];
-    $logins_hash{$LOGIN}{LOGIN} = $row[0];
-    for (my $i = 1; $i < $#row; $i++) {
-      if ($DEBUG > 3) {
-        print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> $row[$i] \n";
+  while (my $row = $q->fetchrow_hashref()) {
+    #my $uid = $login2uid->{$row->{login}}{UID} || 0;
+    #my $bill_id = $login2uid->{$row->{login}}{BILL_ID} || 0;
+
+    while (my @row = $q->fetchrow_array()) {
+      my $LOGIN = $row[0];
+      $logins_hash{$LOGIN}{LOGIN} = $row[0];
+      for (my $i = 1; $i < $#row; $i++) {
+        if ($DEBUG > 3) {
+          print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> " . ($row[$i] || q{}) . "\n";
+        }
+
+        $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i] || q{};
       }
-      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
-    }
 
-    #Extended params
-    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
-      $logins_hash{$LOGIN}{$k} = $v;
+      #Extended params
+      while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
+        $logins_hash{$LOGIN}{$k} = $v;
+      }
     }
-
   }
 
   undef($q);
@@ -852,9 +872,8 @@ sub get_ebs {
 =cut
 #**************************************************
 sub utm5cards {
-  #my ($attr) = @_;
-
 =comments
+
 <?xml version="1.0" encoding="Windows-1251"?>
 <UTM>
  <pool id='5' type='std'>
@@ -864,6 +883,7 @@ sub utm5cards {
   <card id='20297' secret='531258306760' balance='25.0' currency='980' expire_date='31.12.2010' usage_date='��� ���' tp_id='0' />
  </pool>
 </UTM>
+
 =cut
 
   if ($IMPORT_FILE eq '') {
@@ -1874,7 +1894,7 @@ ABillS Migration system Version: $VERSION
                             nika
     SYNC_DEPOSIT        -  filename to sync deposit ( ./2abills.pl FROM=file SYNC_DEPOSIT=/usr/deposits )
     IMPORT_FILE=[file]  - Tab delimiter file or CEL_DELIMITER=...
-    CEL_DELIMITER       - Cel delimiter for file
+    CEL_DELIMITER       - Cel delimiter for file (Default: TAB)
     FILE_FIELDS=[list,.]- Tab delimiter fields position (FILE_FIELDS=LOGIN,PASSWORD,3.FIO...)
     TP_MIGRATION=[file] - File with TP migration information.
                           Format:
@@ -2706,7 +2726,7 @@ sub get_stargazer {
   my %fields_rev = reverse(%fields);
   my $fields_list = "login, " . join(", \n", values(%fields));
 
-  my $sql = "SELECT $fields_list FROM tb_users";
+  my $sql = "SELECT $fields_list FROM tb_users;";
 
   #print $sql;
   if ($DEBUG > 4) {
