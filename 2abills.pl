@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.94
-  UPDATE: 20201216
+  VERSION: 0.95
+  UPDATE: 20201218
 
 =cut
 
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.94;
+my $VERSION = 0.95;
 our (%conf);
 
 #DB information
@@ -817,7 +817,6 @@ sub get_ebs {
   foreach my $key (keys %fields_rev) {
     $key =~ /([a-z\_0-9]+)$/i;
     $fields_rev{$1}=$fields_rev{$key};
-
   }
 
   my $sql = "SELECT
@@ -945,6 +944,7 @@ sub utm5cards {
     $attr
       CEL_DELIMITER
 
+  Returns:
 
 =cut
 #**************************************************
@@ -954,6 +954,10 @@ sub get_file {
   my @FILE_FIELDS = ('3.CONTRACT_ID', '3.FIO', 'LOGIN', 'PASSWORD', '3.ADDRESS_STREET', '4.IP', '3.COMMENTS', '5.SUM', '4.TP_ID', '3.PHONE',);
 
   @FILE_FIELDS = split(/,/, $FILE_FIELDS);
+
+  if ($debug > 2) {
+    print "File fields: ". join(',', @FILE_FIELDS) ."\n";
+  }
 
   #$FILE_FIELDS[0] = 'LOGIN';
   #$FILE_FIELDS[1] = 'PASSWORD';
@@ -1627,7 +1631,8 @@ sub show {
     $logins_info->{$login_}{'LOGIN'} =~ s/\s//g;
 
     if ($FORMAT eq 'html') {
-      $output .= "<tr><td>$logins_info->{$login_}{'LOGIN'}</td><td>$logins_info->{$login_}{'PASSWORD'}</td>";
+      my $password = $logins_info->{$login_}{'PASSWORD'} || $DEFAULT_PASSWORD;
+      $output .= "<tr><td>$logins_info->{$login_}{'LOGIN'}</td><td>$password</td>";
       my $col_number = 0;
       foreach my $column_title (@titles) {
         $col_number++;
@@ -3885,6 +3890,9 @@ sub _date_convert {
 
   if($date =~ /^(\d{4}\-\d{2}\-\d{2})/) {
     $date = $1;
+  }
+  elsif ($date =~ /^(\d{2}\.\d{2}\.\d{4})/) {
+    $date = "$3-$2-$1";
   }
 
   return $date;
