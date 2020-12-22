@@ -1652,6 +1652,12 @@ sub show {
           $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
         }
 
+        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
+          $value = _date_convert($value);
+        }
+
+        $value =~ s/NULL//g;
+
         $output .= "<td>" . $value . "</td>";
       }
       $output .= "</tr>\n";
@@ -1672,9 +1678,11 @@ sub show {
           $value = $TP_MIGRATION{ $value };
         }
 
-        if ($column_title =~ /CONTRACT_DATE|REGISTRATION/) {
+        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
           $value = _date_convert($value);
         }
+
+        $value =~ s/NULL//g;
 
         #Address full
         if ($column_title eq '3.ADDRESS_FULL') {
@@ -3888,10 +3896,14 @@ sub _date_convert {
   my ($input) = @_;
   my $date = $input;
 
+  if(!$date) {
+    return q{};
+  }
+
   if($date =~ /^(\d{4}\-\d{2}\-\d{2})/) {
     $date = $1;
   }
-  elsif ($date =~ /^(\d{2}\.\d{2}\.\d{4})/) {
+  elsif ($date =~ /^(\d{2})\.(\d{2})\.(\d{4})/) {
     $date = "$3-$2-$1";
   }
 
