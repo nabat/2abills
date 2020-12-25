@@ -1680,10 +1680,10 @@ sub show {
           $value = $TP_MIGRATION{ $value };
         }
 
-        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
+        if ($value && $column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
           $value = _date_convert($value);
         }
-        elsif ($column_title =~ /COMMENTS/) {
+        elsif ($value && $column_title =~ /COMMENTS/) {
           $value = s/[\r\n]+/ /g;
         }
 
