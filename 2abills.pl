@@ -1680,14 +1680,18 @@ sub show {
           $value = $TP_MIGRATION{ $value };
         }
 
-        if ($value && $column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
+        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
           $value = _date_convert($value);
         }
-        elsif ($value && $column_title =~ /COMMENTS/) {
-          $value = s/[\r\n]+/ /g;
+        elsif ($column_title =~ /COMMENTS/) {
+          $value =~ s/[\r\n]+/ /g;
         }
 
         $value =~ s/NULL//g;
+
+
+
+
 
         #Address full
         if ($column_title eq '3.ADDRESS_FULL') {
