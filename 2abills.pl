@@ -30,7 +30,7 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.96
+  VERSION: 0.97
   UPDATE: 20201224
 
 =cut
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.96;
+my $VERSION = 0.97;
 our (%conf);
 
 #DB information
@@ -746,7 +746,7 @@ sub get_ebs {
     #u.registration,
     #pi.comments
     'LOGIN'            => 'a.username',
-    'PASSWORD'         => 'a.password',
+    #'PASSWORD'         => 'a.password', # PGP encode
     # '1.ACTIVATE'       => 'activate',
     # '1.EXPIRE'         => 'expire',
     # '1.COMPANY_ID'     => 'company_id',
@@ -839,25 +839,20 @@ sub get_ebs {
   #my $output       = '';
   my %logins_hash = ();
 
-  while (my $row = $q->fetchrow_hashref()) {
-    #my $uid = $login2uid->{$row->{login}}{UID} || 0;
-    #my $bill_id = $login2uid->{$row->{login}}{BILL_ID} || 0;
-
-    while (my @row = $q->fetchrow_array()) {
-      my $LOGIN = $row[0];
-      $logins_hash{$LOGIN}{LOGIN} = $row[0];
-      for (my $i = 1; $i < $#row; $i++) {
-        if ($DEBUG > 3) {
-          print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> " . ($row[$i] || q{}) . "\n";
-        }
-
-        $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i] || q{};
+  while (my @row = $q->fetchrow_array()) {
+    my $LOGIN = $row[0];
+    $logins_hash{$LOGIN}{LOGIN} = $row[0];
+    for (my $i = 1; $i < $#row; $i++) {
+      if ($DEBUG > 3) {
+        print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> " . ($row[$i] || q{}) . "\n";
       }
 
-      #Extended params
-      while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
-        $logins_hash{$LOGIN}{$k} = $v;
-      }
+      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i] || q{};
+    }
+
+    #Extended params
+    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
+      $logins_hash{$LOGIN}{$k} = $v;
     }
   }
 
@@ -1688,10 +1683,6 @@ sub show {
         }
 
         $value =~ s/NULL//g;
-
-
-
-
 
         #Address full
         if ($column_title eq '3.ADDRESS_FULL') {
