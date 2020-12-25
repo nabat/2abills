@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.95
-  UPDATE: 20201218
+  VERSION: 0.96
+  UPDATE: 20201224
 
 =cut
 
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.95;
+my $VERSION = 0.96;
 our (%conf);
 
 #DB information
@@ -1304,9 +1304,9 @@ sub get_utm5_users {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -1578,6 +1578,8 @@ sub all_columns {
   Arguments:
     $logins_info (HASH_REF)
 
+  Returns:
+
 =cut
 #**********************************************************
 sub show {
@@ -1680,6 +1682,9 @@ sub show {
 
         if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
           $value = _date_convert($value);
+        }
+        elsif ($column_title =~ /COMMENTS/) {
+          $value = s/[\r\n]+/ /g;
         }
 
         $value =~ s/NULL//g;
@@ -2126,10 +2131,9 @@ GROUP BY u.uid;
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-
-    if ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/[\r\n]+/ /g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/[\r\n]+/ /g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -2578,9 +2582,9 @@ sub get_nodeny {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -2695,9 +2699,9 @@ sub get_traffpro {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -2770,9 +2774,9 @@ sub get_stargazer {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -2851,9 +2855,9 @@ sub get_stargazer_pg {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -2922,9 +2926,9 @@ sub get_bbilling {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -2990,9 +2994,9 @@ sub get_easyhotspot {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
@@ -3096,9 +3100,9 @@ sub get_lms {
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
       $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
     }
-    elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
-      $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
-    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
 
     #Extended params
     while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
