@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.97
-  UPDATE: 20201224
+  VERSION: 0.99
+  UPDATE: 20210111
 
 =cut
 
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.97;
+my $VERSION = 0.99;
 our (%conf);
 
 #DB information
@@ -597,9 +597,9 @@ sub get_abills {
     '3.ZIP'            => 'zip',
     '3.PHONE'          => 'phone',
     '3.CITY'           => 'city',
-    '3.PASSPORT_NUM'   => 'pasport_num',
-    '3.PASSPORT_DATE'  => 'pasport_date',
-    '3.PASSPORT_GRANT' => 'pasport_grant',
+    '3.PASPORT_NUM'   => 'pasport_num',
+    '3.PASPORT_DATE'  => 'pasport_date',
+    '3.PASPORT_GRANT' => 'pasport_grant',
 
     '4.CID'            => 'CID',
     '4.FILTER_ID'      => 'filter_id',
@@ -807,8 +807,8 @@ sub get_ebs {
     #  '6.DISABLE'	        => 0,
     #  '6.EXPIRE'	        => undef,
     #  '6.PASSWORD'	      => 'email_pass',
-    '3.TP_NUM'         => 'ba.tarif_id AS tp_id',
-    '3.TP_NAME'        => 'tp.name AS tp_name',
+    '4.TP_NUM'         => 'ba.tarif_id AS tp_id',
+    '4.TP_NAME'        => 'tp.name AS tp_name',
   );
 
   my %fields_rev = reverse(%fields);
@@ -842,7 +842,7 @@ sub get_ebs {
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
     $logins_hash{$LOGIN}{LOGIN} = $row[0];
-    for (my $i = 1; $i < $#row; $i++) {
+    for (my $i = 1; $i < $#row + 1; $i++) {
       if ($DEBUG > 3) {
         print "$i, $query_fields->[$i], $fields_rev{$query_fields->[$i]} -> " . ($row[$i] || q{}) . "\n";
       }
@@ -1683,6 +1683,10 @@ sub show {
         }
 
         $value =~ s/NULL//g;
+
+        if (! $value) {
+          next;
+        }
 
         #Address full
         if ($column_title eq '3.ADDRESS_FULL') {
