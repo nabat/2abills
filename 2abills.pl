@@ -775,9 +775,9 @@ sub get_ebs {
     #'3.FIO2'           => 'last_name',
     #'3.FIO3'           => 'first_name',
     '3.PHONE'          => 'a.phone_m', #,contactperson_phone,phone_h',
-    '3.PASSPORT_NUM'   => 'a.passport',
-    '3.PASSPORT_DATE'  => 'a.passport_date',
-    '3.PASSPORT_GRANT' => 'a.passport_given',
+    '3.PASPORT_NUM'   => 'a.passport',
+    '3.PASPORT_DATE'  => 'a.passport_date',
+    '3.PASPORT_GRANT' => 'a.passport_given',
 
     # '4.CID'            => 'CID',
     # '4.FILTER_ID'      => 'filter_id',
