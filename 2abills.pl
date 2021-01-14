@@ -30,7 +30,7 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 0.99
+  VERSION: 1.01
   UPDATE: 20210111
 
 =cut
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 0.99;
+my $VERSION = 1.01;
 our (%conf);
 
 #DB information
@@ -764,6 +764,7 @@ sub get_ebs {
     '3.ADDRESS_BUILD'  => 'a.house',
     '3.FLOOR'          => 'a.house_bulk',
     '3.ENTRANCE'       => 'a.entrance',
+    #'3.INN'            => 'a.'
 
     # '3.COUNTRY_ID'     => 'country_id',
     '3.COMMENTS'       => 'a.comment',
@@ -775,9 +776,14 @@ sub get_ebs {
     #'3.FIO2'           => 'last_name',
     #'3.FIO3'           => 'first_name',
     '3.PHONE'          => 'a.phone_m', #,contactperson_phone,phone_h',
-    '3.PASPORT_NUM'   => 'a.passport',
-    '3.PASPORT_DATE'  => 'a.passport_date',
-    '3.PASPORT_GRANT' => 'a.passport_given',
+    '3.PASPORT_NUM'    => 'a.passport',
+    '3.PASPORT_DATE'   => 'a.passport_date',
+    '3.PASPORT_GRANT'  => 'a.passport_given',
+
+    '3._HARDWARE_MODEL_ID'=> 'h.model_id',
+    '3._HARDWARE_NAME'    => 'h.name',
+    '3._HARDWARE_SN'      => 'h.sn',
+    '3._HARDWARE_COMMENT' => 'h.comment',
 
     # '4.CID'            => 'CID',
     # '4.FILTER_ID'      => 'filter_id',
@@ -809,6 +815,8 @@ sub get_ebs {
     #  '6.PASSWORD'	      => 'email_pass',
     '4.TP_NUM'         => 'ba.tarif_id AS tp_id',
     '4.TP_NAME'        => 'tp.name AS tp_name',
+    '4.IP'             => 'sa.vpn_ip_address',
+
   );
 
   my %fields_rev = reverse(%fields);
@@ -824,6 +832,9 @@ sub get_ebs {
         FROM billservice_account a
         LEFT JOIN billservice_accounttarif ba ON (a.id=ba.account_id)
         LEFT JOIN billservice_tariff tp ON (ba.tarif_id=tp.id)
+        LEFT JOIN billservice_subaccount sa ON (sa.account_id=a.id)
+        LEFT JOIN billservice_accounthadrware ah ON (ah.account_id=a.id)
+        LEFT JOIN billservice_hadrware h ON (h.id=h.harware_id)
         WHERE
      tp.id <> 28
      AND a.status IN (1,4)
@@ -1680,6 +1691,12 @@ sub show {
         }
         elsif ($column_title =~ /COMMENTS/) {
           $value =~ s/[\r\n]+/ /g;
+        }
+        elsif ($column_title eq '1.CREDIT' && $value == 0) {
+          next;
+        }
+        elsif ($column_title eq '1.DISABLE' && $value == 0) {
+          next;
         }
 
         $value =~ s/NULL//g;
