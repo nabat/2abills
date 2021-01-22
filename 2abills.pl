@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.01
-  UPDATE: 20210111
+  VERSION: 1.02
+  UPDATE: 20210121
 
 =cut
 
@@ -813,14 +813,21 @@ sub get_ebs {
     #  '6.DISABLE'	        => 0,
     #  '6.EXPIRE'	        => undef,
     #  '6.PASSWORD'	      => 'email_pass',
-    '4.TP_NUM'         => 'ba.tarif_id AS tp_id',
-    '4.TP_NAME'        => 'tp.name AS tp_name',
+    #'4.TP_NUM'         => 'ba.tarif_id AS tp_id',
+    #'4.TP_NAME'        => 'tp.name AS tp_name',
+    '4.TP_NUM'         => '(SELECT tarif_id FROM billservice_accounttarif ba, billservice_tariff tp
+  WHERE ba.tarif_id=tp.id AND account_id=a.id AND datetime < NOW() ORDER BY datetime DESC  LIMIT 1) AS tp_num',
+    '4.TP_NAME'        => '(SELECT tp.name FROM billservice_accounttarif ba, billservice_tariff tp
+  WHERE ba.tarif_id=tp.id AND account_id=a.id AND datetime < NOW() ORDER BY datetime DESC LIMIT 1) AS tp_name',
+
+    '4.CHANGE_TP_NAME' => 'next_tp.tarif_id AS next_tp_id',
+    '4.CHANGE_TP_DATE' => 'next_tp.datetime AS next_tp_date',
     '4.IP'             => 'sa.vpn_ip_address',
 
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "username, " . join(", \n", values(%fields));
+  my $fields_list = "a.username, " . join(", \n", values(%fields));
 
   foreach my $key (keys %fields_rev) {
     $key =~ /([a-z\_0-9]+)$/i;
@@ -833,13 +840,14 @@ sub get_ebs {
         LEFT JOIN billservice_accounttarif ba ON (a.id=ba.account_id)
         LEFT JOIN billservice_tariff tp ON (ba.tarif_id=tp.id)
         LEFT JOIN billservice_subaccount sa ON (sa.account_id=a.id)
-        LEFT JOIN billservice_accounthadrware ah ON (ah.account_id=a.id)
-        LEFT JOIN billservice_hadrware h ON (h.id=h.harware_id)
+        LEFT JOIN billservice_accounthardware ah ON (ah.account_id=a.id)
+        LEFT JOIN billservice_hardware h ON (h.id=ah.hardware_id)
+        LEFT JOIN billservice_accounttarif next_tp ON (next_tp.tarif_id=next_tp.id AND next_tp.datetime > NOW())
         WHERE
      tp.id <> 28
      AND a.status IN (1,4)
      AND a.deleted IS NULL
-     GROUP BY a.id, ba.tarif_id, tp.name
+     GROUP BY a.id, ba.tarif_id, tp.name, model_id, h.name, h.comment, sa.vpn_ip_address, h.sn
   ;";
 
   print "$sql\n" if ($DEBUG > 0);
@@ -1692,10 +1700,10 @@ sub show {
         elsif ($column_title =~ /COMMENTS/) {
           $value =~ s/[\r\n]+/ /g;
         }
-        elsif ($column_title eq '1.CREDIT' && $value == 0) {
+        elsif ($column_title eq '1.CREDIT' && (! $value && $value == 0)) {
           next;
         }
-        elsif ($column_title eq '1.DISABLE' && $value == 0) {
+        elsif ($column_title eq '1.DISABLE' && (! $value && $value == 0)) {
           next;
         }
 
