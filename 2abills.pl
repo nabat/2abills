@@ -787,7 +787,7 @@ sub get_ebs {
     '3._HARDWARE_NAME'    => 'h.name',
     '3._HARDWARE_SN'      => 'h.sn',
     '3._HARDWARE_COMMENT' => 'h.comment AS _hardware_comment',
-    '3._HARDWARE_RETURNED'=> 'h.returned',
+    '3._HARDWARE_RETURNED'=> 'ah.returned',
 
     # '4.CID'            => 'CID',
     # '4.FILTER_ID'      => 'filter_id',
@@ -824,7 +824,7 @@ sub get_ebs {
     '4.TP_NAME'        => '(SELECT tp.name FROM billservice_accounttarif ba, billservice_tariff tp
   WHERE ba.tarif_id=tp.id AND account_id=a.id AND datetime < NOW() ORDER BY datetime DESC LIMIT 1) AS tp_name',
 
-    '4.CHANGE_TP_NAME' => 'next_tp.tarif_id AS next_tp_id',
+    '4.CHANGE_TP_NAME' => 'tp_next.name AS next_tp_id',
     '4.CHANGE_TP_DATE' => 'next_tp.datetime AS next_tp_date',
     '4.IP'             => 'sa.vpn_ip_address',
 
@@ -841,17 +841,20 @@ sub get_ebs {
   my $sql = "SELECT
      $fields_list
         FROM billservice_account a
-        LEFT JOIN billservice_accounttarif ba ON (a.id=ba.account_id)
+        LEFT JOIN billservice_accounttarif ba ON (a.id=ba.account_id AND ba.datetime < NOW())
         LEFT JOIN billservice_tariff tp ON (ba.tarif_id=tp.id)
         LEFT JOIN billservice_subaccount sa ON (sa.account_id=a.id)
         LEFT JOIN billservice_accounthardware ah ON (ah.account_id=a.id)
         LEFT JOIN billservice_hardware h ON (h.id=ah.hardware_id)
-        LEFT JOIN billservice_accounttarif next_tp ON (next_tp.tarif_id=next_tp.id AND next_tp.datetime > NOW())
+        LEFT JOIN billservice_accounttarif next_tp ON (a.id=next_tp.account_id AND next_tp.tarif_id=next_tp.id AND next_tp.datetime > NOW())
+        LEFT JOIN billservice_tariff tp_next ON (next_tp.tarif_id=tp_next.id)
         WHERE
      tp.id <> 28
      AND a.status IN (1,4)
      AND a.deleted IS NULL
-     GROUP BY a.id, ba.tarif_id, tp.name, next_tp.datetime, next_tp.tarif_id, model_id, h.name, h.comment, sa.vpn_ip_address, h.sn
+     GROUP BY a.id, ba.tarif_id, tp.name, next_tp.datetime, next_tp.tarif_id, model_id, h.name, h.comment, sa.vpn_ip_address,
+       h.sn, ah.returned, ah.datetime, sa.password,
+       tp_next.name
   ;";
 
   print "$sql\n" if ($DEBUG > 0);
