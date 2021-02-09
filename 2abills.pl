@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.04
-  UPDATE: 20210123
+  VERSION: 1.05
+  UPDATE: 20210203
 
 =cut
 
@@ -745,46 +745,49 @@ sub get_ebs {
     #u.gid,
     #u.registration,
     #pi.comments
-    'LOGIN'               => 'a.username',
-    #'PASSWORD'         => 'a.password', # PGP encode
+    'LOGIN'                 => 'a.username',
+    'PASSWORD'              => 'sa.password', # PGP encode
     # '1.ACTIVATE'       => 'activate',
     # '1.EXPIRE'         => 'expire',
     # '1.COMPANY_ID'     => 'company_id',
-    '1.CREDIT'            => 'a.credit',
-    '1.GID'               => 'a.account_group_id',
-    '1.DELETED'           => 'a.deleted',
+    '1.CREDIT'              => 'a.credit',
+    '1.GID'                 => 'a.account_group_id',
+    '1.DELETED'             => 'a.deleted',
     # '1.REDUCTION'      => 'reduction',
-    '1.REGISTRATION'      => 'a.created',
-    '1.DISABLE'           => 'a.status',
-    '3.ADDRESS_FLAT'      => 'a.room',
-    '3.DISTRICT'          => 'a.region',
-    '3.ADDRESS_STREET'    => 'a.street',
-    '3.CITY'              => 'a.city',
-    '3.ZIP'               => 'a.postcode',
-    '3.ADDRESS_BUILD'     => 'a.house',
-    '3.FLOOR'             => 'a.house_bulk',
-    '3.ENTRANCE'          => 'a.entrance',
+    '1.REGISTRATION'        => 'a.created',
+    '1.DISABLE'             => 'a.status',
+    '3.ADDRESS_FLAT'        => 'a.room',
+    '3.DISTRICT'            => 'a.region',
+    '3.ADDRESS_STREET'      => 'a.street',
+    '3.CITY'                => 'a.city',
+    '3.ZIP'                 => 'a.postcode',
+    '3.ADDRESS_BUILD'       => 'a.house',
+    '3._ADDRESS_HOUSE_BULK' => 'a.house_bulk',
+    '3.FLOOR'               => 'a.row',
+    '3.ENTRANCE'            => 'a.entrance',
     #'3.INN'            => 'a.'
 
     # '3.COUNTRY_ID'     => 'country_id',
-    '3.COMMENTS'          => 'a.comment',
-    '3.CONTRACT_ID'       => 'a.contract',
+    '3.COMMENTS'            => 'a.comment',
+    '3.CONTRACT_ID'         => 'a.contract',
     # '3.CONTRACT_DATE'  => 'contract_date',
     # '3.CONTRACT_SUFIX' => 'contract_sufix',
-    '3.EMAIL'             => 'a.email',
-    '3.FIO'               => 'a.fullname',
+    '3.EMAIL'               => 'a.email',
+    '3.FIO'                 => 'a.fullname',
     #'3.FIO2'           => 'last_name',
     #'3.FIO3'           => 'first_name',
-    '3.PHONE'             => 'a.phone_m', #,contactperson_phone,phone_h',
-    '3.PASPORT_NUM'       => 'a.passport',
-    '3.PASPORT_DATE'      => 'a.passport_date',
-    '3.PASPORT_GRANT'     => 'a.passport_given',
-    '3.INN'               => 'a.private_passport_number',
+    '3.PHONE'               => 'a.phone_m', #,contactperson_phone,phone_h',
+    '3.PASPORT_NUM'         => 'a.passport',
+    '3.PASPORT_DATE'        => 'a.passport_date',
+    '3.PASPORT_GRANT'       => 'a.passport_given',
+    '3.INN'                 => 'a.private_passport_number',
+    '3._HARDWARE_DATE'      => 'ah.datetime as _hardware_date',
 
     '3._HARDWARE_MODEL_ID'=> 'h.model_id',
     '3._HARDWARE_NAME'    => 'h.name',
     '3._HARDWARE_SN'      => 'h.sn',
-    '3._HARDWARE_COMMENT' => 'h.comment',
+    '3._HARDWARE_COMMENT' => 'h.comment AS _hardware_comment',
+    '3._HARDWARE_RETURNED'=> 'h.returned',
 
     # '4.CID'            => 'CID',
     # '4.FILTER_ID'      => 'filter_id',
@@ -848,7 +851,7 @@ sub get_ebs {
      tp.id <> 28
      AND a.status IN (1,4)
      AND a.deleted IS NULL
-     GROUP BY a.id, ba.tarif_id, tp.name, model_id, h.name, h.comment, sa.vpn_ip_address, h.sn
+     GROUP BY a.id, ba.tarif_id, tp.name, next_tp.datetime, next_tp.tarif_id, model_id, h.name, h.comment, sa.vpn_ip_address, h.sn
   ;";
 
   print "$sql\n" if ($DEBUG > 0);
@@ -1707,11 +1710,11 @@ sub show {
         elsif ($column_title eq '5.SUM' && (! $value || $value == 0)) {
           next;
         }
-        elsif ($column_title eq '1.DISABLE' && (! $value || $value == 0)) {
+        elsif ($column_title eq '1.DISABLE' && (! $value || $value !~ /^\d+$/ || $value == 0)) {
           next;
         }
 
-        $value =~ s/NULL//g;
+        $value =~ s/NULL//g if ($value);
 
         if (! $value) {
           next;
