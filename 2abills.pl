@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.05
-  UPDATE: 20210203
+  VERSION: 1.06
+  UPDATE: 20210208
 
 =cut
 
