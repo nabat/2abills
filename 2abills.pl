@@ -30,7 +30,7 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.06
+  VERSION: 1.07
   UPDATE: 20210208
 
 =cut
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.04;
+my $VERSION = 1.07;
 our (%conf);
 
 #DB information
@@ -712,8 +712,6 @@ sub get_ebs {
   #   | promise_summ | allow_block_after_summ | block_after_summ | promise_days | promise_min_ballance | account_group_id
   #   | birthday | extra_fields | bonus_ballance | passportdislocate | disable_notifications
 
-
-  my $main_table = 'billservice_account';
   my %fields = (
     #DECODE(u.password, 'test12345678901234567890') AS password,
     #pi.fio as fio,
@@ -746,7 +744,7 @@ sub get_ebs {
     #u.registration,
     #pi.comments
     'LOGIN'                 => 'a.username',
-    'PASSWORD'              => 'sa.password', # PGP encode
+    'PASSWORD'              => "decrypt_pw(sa.password, '". $argv->{PASSSWD_ENCRYPTION_KEY} ."') AS password", # PGP encode
     # '1.ACTIVATE'       => 'activate',
     # '1.EXPIRE'         => 'expire',
     # '1.COMPANY_ID'     => 'company_id',
@@ -782,6 +780,7 @@ sub get_ebs {
     '3.PASPORT_GRANT'       => 'a.passport_given',
     '3.INN'                 => 'a.private_passport_number',
     '3._HARDWARE_DATE'      => 'ah.datetime as _hardware_date',
+    '3._PASPORT_REG'        => 'a.passportdislocate',
 
     '3._HARDWARE_MODEL_ID'=> 'h.model_id',
     '3._HARDWARE_NAME'    => 'h.name',
@@ -846,7 +845,7 @@ sub get_ebs {
         LEFT JOIN billservice_subaccount sa ON (sa.account_id=a.id)
         LEFT JOIN billservice_accounthardware ah ON (ah.account_id=a.id)
         LEFT JOIN billservice_hardware h ON (h.id=ah.hardware_id)
-        LEFT JOIN billservice_accounttarif next_tp ON (a.id=next_tp.account_id AND next_tp.tarif_id=next_tp.id AND next_tp.datetime > NOW())
+        LEFT JOIN billservice_accounttarif next_tp ON (a.id=next_tp.account_id AND next_tp.datetime > NOW())
         LEFT JOIN billservice_tariff tp_next ON (next_tp.tarif_id=tp_next.id)
         WHERE
      tp.id <> 28
