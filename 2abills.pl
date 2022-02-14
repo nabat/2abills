@@ -30,8 +30,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.10
-  UPDATE: 20210411
+  VERSION: 1.11
+  UPDATE: 20220211
 
 =cut
 
@@ -41,7 +41,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.10;
+my $VERSION = 1.11;
 our (%conf);
 
 #DB information
@@ -2039,8 +2039,10 @@ sub parse_arguments {
 =head2 get_mikbill($attr) -  Export from Mikbill
 
   Arguments:
-    BLOCKED
-    DELETED
+    $attr
+      BLOCKED
+      DELETED
+      FREEZE
 
   Results:
 
@@ -2048,6 +2050,10 @@ sub parse_arguments {
 #**********************************************************
 sub get_mikbill {
   my ($attr) = @_;
+
+  if (! defined($attr->{FREEZE})) {
+    $attr->{FREEZE}=0;
+  }
 
   my %fields = (
     'LOGIN'               => 'user',
@@ -2778,13 +2784,13 @@ sub get_stargazer {
     '4.TP_ID'          => 'Tariff',
 
     '5.SUM'            => 'Cash',
-
   );
 
   my %fields_rev = reverse(%fields);
   my $fields_list = "login, " . join(", \n", values(%fields));
+  my $users_table = ($argv->{UBILLING}) ? 'users' : 'tb_users';
 
-  my $sql = "SELECT $fields_list FROM tb_users;";
+  my $sql = "SELECT $fields_list FROM $users_table;";
 
   #print $sql;
   if ($DEBUG > 4) {
@@ -2798,7 +2804,6 @@ sub get_stargazer {
   $q->execute();
   my $query_fields = $q->{NAME};
 
-  #my $output = '';
   my %logins_hash = ();
 
   while (my @row = $q->fetchrow_array()) {
