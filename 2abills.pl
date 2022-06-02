@@ -122,7 +122,7 @@ if ($from) {
     $INFO_LOGINS = get_freenibs_users();
   }
   elsif ($from eq 'mabill') {
-    $INFO_LOGINS = get_freenibsperl_users({ MABILL => 1 });
+    $INFO_LOGINS = get_freenibs_users({ MABILL => 1 });
   }
   elsif ($from eq 'utm4') {
     $INFO_LOGINS = get_utm4_users();
@@ -3990,7 +3990,7 @@ sub int2ip {
 
 #*******************************************************************
 =head2 get_mikrobill() - Get and parse data from Mikrobill
-  Arguments:
+
 
 =cut
 #*******************************************************************
@@ -4011,6 +4011,19 @@ sub get_mikrobill {
     $ref->{usrip} =~ s/;//g;
     $ref->{ballance}=~ s/ Грн.//g;
     $ref->{ballance}=~ s/\,/\./g;
+
+    my @speed = split(/ /,$ref->{spdlim});
+    $speed[0] =~ s/\,/\./g;
+    $speed[0] =~ s/-//g;
+
+    my $stopdate = "$ref->{stopdate}";
+    $stopdate =~ s/ //g;
+
+    my $expire = '';
+    if ($stopdate ne '01.01.0001') {
+        $stopdate = Time::Piece->strptime($stopdate, "%d.%m.%Y");
+        $expire = $stopdate->strftime("%Y-%m-%d");
+    }
 
     my @otherinfo = split(/\|\|/,$ref->{'otherinfo'});
     my @personalinfo = split(/\|\|/,$ref->{'pinfo'});
@@ -4039,10 +4052,10 @@ sub get_mikrobill {
       'LOGIN'      => $login,
       'PASSWORD'   => $ref->{user_pswd},
 
-      '1.EXPIRE'   => $ref->{stopdate},
+      '1.EXPIRE'   => $expire,
       '1.COMPANY_ID' => $company,
       '1.CREDIT' => $perscredit,
-      '1.GID'      => $ref->{group_guid},
+      '1.GID_NAME'    => $ref->{group_guid},
 
       '3.ADDRESS_FULL' => $address,
       '3.COMMENTS' => "$comment\n$comment2\n$comment3",
@@ -4056,13 +4069,12 @@ sub get_mikrobill {
       '4.CID'  => $mac,
       '4.CPE_MAC' => $mac,
       '4.IP' => $ref->{usrip},
-      '4.SPEED' => $ref->{spdlim},
+      '4.SPEED' => $speed[0],
       '4.TP_NAME' => $ref->{tarif},
       '4.INTERNET_SKIP_FEE' => 1,
 
       '5.SUM' => $ref->{ballance},
       '5.DESCRIBE' => 'Migration',
-      '5.DATE' => $ref->{paytime},
 
     );
 
