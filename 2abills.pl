@@ -24,6 +24,7 @@ use warnings;
    Carbonsoft 5
    NIkasyatem
    file
+   Mikrobill
 
 
    2abills.pl former abills migration file for Cards module account creation
@@ -210,6 +211,9 @@ if ($from) {
   }
   elsif ($from eq 'carbon5') {
     $INFO_LOGINS = get_carbon5();
+  }
+  elsif ($from eq 'mikrobill') {
+    $INFO_LOGINS = get_mikrobill();
   }
   elsif (defined(\&{ 'get_' . $from } )) {
     $INFO_LOGINS = &{\&{'get_'.$from}}();
@@ -1951,6 +1955,7 @@ ABillS Migration system Version: $VERSION
                             lms_nodes (IP, MAC adresses for lms users)
                             odbc
                             nika
+                            mikrobill
     SYNC_DEPOSIT        -  filename to sync deposit ( ./2abills.pl FROM=file SYNC_DEPOSIT=/usr/deposits )
     IMPORT_FILE=[file]  - Tab delimiter file or CEL_DELIMITER=...
     CEL_DELIMITER       - Cel delimiter for file (Default: TAB)
@@ -3983,4 +3988,101 @@ sub int2ip {
   #return "$d[0].$d[1].$d[2].$d[3]";
 }
 
+#*******************************************************************
+=head2 get_mikrobill() - Get and parse data from Mikrobill
+
+
+=cut
+#*******************************************************************
+sub get_mikrobill {
+
+  my $sql = "
+    SELECT *
+    FROM stat
+  ";
+
+  my DBI $q = $db->prepare($sql);
+  $q->execute();
+
+  my %total_data;
+
+  while (my $ref = $q->fetchrow_hashref) {
+
+    $ref->{usrip} =~ s/;//g;
+    $ref->{ballance}=~ s/ Грн.//g;
+    $ref->{ballance}=~ s/\,/\./g;
+
+    my @speed = split(/ /,$ref->{spdlim});
+    $speed[0] =~ s/\,/\./g;
+    $speed[0] =~ s/-//g;
+
+    my $stopdate = "$ref->{stopdate}";
+    $stopdate =~ s/ //g;
+
+    my $expire = '';
+    if ($stopdate ne '01.01.0001') {
+        $stopdate = Time::Piece->strptime($stopdate, "%d.%m.%Y");
+        $expire = $stopdate->strftime("%Y-%m-%d");
+    }
+
+    my @otherinfo = split(/\|\|/,$ref->{'otherinfo'});
+    my @personalinfo = split(/\|\|/,$ref->{'pinfo'});
+
+    my $login = $ref->{user_name},
+    my $address = $otherinfo[2],
+    # my  $address2   = $personalinfo[6],
+
+    my $tel = $otherinfo[3];
+    my $email = $otherinfo[4];
+    my $mac = $otherinfo[6];
+
+    my $comment    = $otherinfo[9];
+    my $comment2   = $otherinfo[25];
+    my $perscredit = $otherinfo[34];
+
+    my $passid  = $personalinfo[14];
+    my $passport_vidan = $personalinfo[20];
+    my $passport_code = $personalinfo[21];
+    my $passport_series = $personalinfo[22];
+    my $passport_number = $personalinfo[23];
+    my $comment3 = $personalinfo[26];
+    my $company = $personalinfo[28];
+
+    my %fields = (
+      'LOGIN'      => $login,
+      'PASSWORD'   => $ref->{user_pswd},
+
+      '1.EXPIRE'   => $expire,
+      '1.COMPANY_ID' => $company,
+      '1.CREDIT' => $perscredit,
+      '1.GID_NAME'    => $ref->{group_guid},
+
+      '3.ADDRESS_FULL' => $address,
+      '3.COMMENTS' => "$comment\n$comment2\n$comment3",
+      '3.CONTRACT_ID' => $ref->{contract},
+      '3.EMAIL' => $email,
+      '3.FIO'       => $ref->{FIO},
+      '3.PHONE' => $tel,
+      '3.PASPORT_NUM' => "$passport_code $passport_series $passport_number",
+      '3.PASPORT_DATE' => $passport_vidan,
+
+      '4.CID'  => $mac,
+      '4.CPE_MAC' => $mac,
+      '4.IP' => $ref->{usrip},
+      '4.SPEED' => $speed[0],
+      '4.TP_NAME' => $ref->{tarif},
+      '4.INTERNET_SKIP_FEE' => 1,
+
+      '5.SUM' => $ref->{ballance},
+      '5.DESCRIBE' => 'Migration',
+
+    );
+
+    $total_data{$login} = \%fields;
+
+  }
+
+  undef($q);
+  return \%total_data;
+}
 1
