@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.12
-  UPDATE: 20220711
+  VERSION: 1.13
+  UPDATE: 20220720
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.11;
+my $VERSION = 1.13;
 our (%conf);
 
 #DB information
@@ -2545,16 +2545,16 @@ sub get_nodeny {
   $encryption_key = "hardpass3" if (!$encryption_key);
 
   my %fields = (
-    '1.UID',           => 'u.id',
-    'LOGIN'            => 'name',
-    'PASSWORD'         => "AES_DECRYPT(passwd, \'$encryption_key\')",
-    '1.ACTIVATE'       => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\')',
+    '1.UID',             => 'u.id',
+    'LOGIN'              => 'name',
+    'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\')",
+    '1.ACTIVATE'         => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\')',
 
     #  '1.EXPIRE'			=> 'expired',
     #  '1.COMPANY_ID'		=> '',
     #  '1.CREDIT'			=> 'credit',
-    '1.GID'            => 'grp',
-    '1.REDUCTION'      => 'discount',
+    '1.GID'              => 'grp',
+    '1.REDUCTION'        => 'discount',
 
     #  '1.REGISTRATION'		=> 'add_date',
     #  '1.DISABLE'			=> 'blocked',
@@ -2562,29 +2562,33 @@ sub get_nodeny {
     #  '3.ADDRESS_FLAT'		=> 'app',
     #  '3.ADDRESS_STREET'	=> 'address',
     #  '3.ADDRESS_BUILD'		=> 'houseid',
-    '3.COMMENTS'       => 'u.comment',
-    '3.CONTRACT_ID'    => 'contract',
+    '3.COMMENTS'         => 'u.comment',
+    '3.CONTRACT_ID'      => 'contract',
 
     #  '3.EMAIL'				=> 'email',
-    '3.FIO'            => 'fio',
+    '3.FIO'              => 'fio',
 
     #  '5.PASPORT_GRANT'		=> 'passportserie',
     #  '3.PHONE'				=> 'mob_tel',
 
     #  '4.CID'				=> '',
     #  '4.FILTER_ID'		=> '',
-    '4.IP'             => 'ip',
+    '4.IP'               => 'ip',
 
     #  '4.NETMASK'			=> 'framed_mask',
     #  '4.SIMULTANEONSLY'	=> 'simultaneous_use',
     #  '4.SPEED'			=> 'speed',
-    '4.TP_ID'          => 'paket',
+    '4.TP_ID'            => 'paket',
 
     #  '4.CALLBACK'			=> 'allow_callback',
 
-    '5.SUM'            => 'balance',
+    '5.SUM'              => 'balance',
 
-    '3._EXTRA_SERVICE' => 'srvs',
+    '3._EXTRA_SERVICE'   => 'srvs',
+    '3._NEXT_PAKET'      => 'next_paket',
+    '11.TP_ID'           => 'paket3',
+    '11.CHANGE_TP_NAME', => 'next_paket3',
+    #'11.CHANGE_TP_DATE'  => '',
 
     '3.'  => "MAX(IF (v.dopfield_id = 1, k.field_name, ''))",
     '3.SPEED_IN'  => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
