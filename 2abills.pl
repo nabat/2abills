@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.13
-  UPDATE: 20220720
+  VERSION: 1.14
+  UPDATE: 20220721
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.13;
+my $VERSION = 1.14;
 our (%conf);
 
 #DB information
@@ -1234,7 +1234,9 @@ sub get_utm5_users {
     '3.ADDRESS_FLAT'    => 'flat_number',
     '3.ADDRESS_STREET'  => 'IF(t12.street!=\'\', t12.street, \'\')',
     '3.ADDRESS_BUILD'   => 'IF(t12.number!=\'\', t12.number, \'\')',
-    '3.COMMENTS'        => 'ua.comments',
+    '3._ACTUAL_ADDRESS' => 'u.actual_address',
+    '4.PASSSWORD'       => 'u.password',
+    #'3.COMMENTS'        => 'ua.comments',
 
     #  '3.CONTRACT_ID'       => '',
     '3.EMAIL'           => 'IF(u.email!=\'\', u.email, \'\')',
@@ -1330,7 +1332,16 @@ sub get_utm5_users {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
-      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
+      my $field = q{};
+      if ($fields_rev{ $query_fields->[$i] }) {
+        $field = $fields_rev{ $query_fields->[$i] };
+      }
+      else {
+        print "NOt found ID: $query_fields->[$i]\n";
+        exit;
+      }
+
+      $logins_hash{$LOGIN}{ $field } = $row[$i];
     }
 
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
