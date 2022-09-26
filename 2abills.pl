@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.14
-  UPDATE: 20220721
+  VERSION: 1.15
+  UPDATE: 20220926
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.14;
+my $VERSION = 1.15;
 our (%conf);
 
 #DB information
@@ -1234,9 +1234,7 @@ sub get_utm5_users {
     '3.ADDRESS_FLAT'    => 'flat_number',
     '3.ADDRESS_STREET'  => 'IF(t12.street!=\'\', t12.street, \'\')',
     '3.ADDRESS_BUILD'   => 'IF(t12.number!=\'\', t12.number, \'\')',
-    '3._ACTUAL_ADDRESS' => 'u.actual_address',
-    '4.PASSSWORD'       => 'u.password',
-    #'3.COMMENTS'        => 'ua.comments',
+    '3.COMMENTS'        => 'ua.comments',
 
     #  '3.CONTRACT_ID'       => '',
     '3.EMAIL'           => 'IF(u.email!=\'\', u.email, \'\')',
@@ -1332,16 +1330,7 @@ sub get_utm5_users {
         print "$i, $query_fields->[$i], " . $fields_rev{"$query_fields->[$i]"} . " -> $row[$i] \n";
       }
 
-      my $field = q{};
-      if ($fields_rev{ $query_fields->[$i] }) {
-        $field = $fields_rev{ $query_fields->[$i] };
-      }
-      else {
-        print "NOt found ID: $query_fields->[$i]\n";
-        exit;
-      }
-
-      $logins_hash{$LOGIN}{ $field } = $row[$i];
+      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
     }
 
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
@@ -2558,8 +2547,8 @@ sub get_nodeny {
   my %fields = (
     '1.UID',             => 'u.id',
     'LOGIN'              => 'name',
-    'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\')",
-    '1.ACTIVATE'         => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\')',
+    'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\') AS password",
+    '1.ACTIVATE'         => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\') AS activate',
 
     #  '1.EXPIRE'			=> 'expired',
     #  '1.COMPANY_ID'		=> '',
@@ -2601,114 +2590,117 @@ sub get_nodeny {
     '11.CHANGE_TP_NAME', => 'next_paket3',
     #'11.CHANGE_TP_DATE'  => '',
 
-    '3.'  => "MAX(IF (v.dopfield_id = 1, k.field_name, ''))",
+    #'3._DOPFIELD_1'  => "MAX(IF (v.dopfield_id = 1, k.field_name, ''))",
     '3.SPEED_IN'  => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
-    '3.'  => "MAX(IF (v.dopfield_id = 2, k.field_name, ''))",
+    #'3._DOPFIELD_2'  => "MAX(IF (v.dopfield_id = 2, k.field_name, ''))",
     '3.SPEED_OUT'  => "MAX(IF (v.dopfield_id = 2, v.field_value, '')) AS _speed_out",
-    '3.'  => "MAX(IF (v.dopfield_id = 3, k.field_name, ''))",
+    #'3._DOPFIELD_3'  => "MAX(IF (v.dopfield_id = 3, k.field_name, ''))",
     '3._TCP_24'  => "MAX(IF (v.dopfield_id = 3, v.field_value, '')) AS _tcp_25",
-    '3.'  => "MAX(IF (v.dopfield_id = 4, k.field_name, ''))",
+    #'3.'  => "MAX(IF (v.dopfield_id = 4, k.field_name, ''))",
     '3.MAC'  => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
-    '3.'  => "MAX(IF (v.dopfield_id = 5, k.field_name, ''))",
-    '3.'  => "MAX(IF (v.dopfield_id = 5, v.field_value, ''))",
+    #'3.'  => "MAX(IF (v.dopfield_id = 5, k.field_name, ''))",
+    '3._FIELD_5'  => "MAX(IF (v.dopfield_id = 5, v.field_value, '')) AS field_5",
     '3.ADDRESS_STREET'  => "MAX(IF (v.dopfield_id = 5, s.name_street, ''))  AS address_street",
-    '3.'  => "MAX(IF (v.dopfield_id = 6, k.field_name, ''))",
+    #'3.'  => "MAX(IF (v.dopfield_id = 6, k.field_name, ''))",
     '3.ADDRESS_BUILD'  => "MAX(IF (v.dopfield_id = 6, v.field_value, '')) AS address_build",
 
-    '3.'  => "MAX(IF (v.dopfield_id = 7, k.field_name, ''))",
-    '3.'  => "MAX(IF (v.dopfield_id = 7, v.field_value, ''))",
+    #'3.'  => "MAX(IF (v.dopfield_id = 7, k.field_name, ''))",
+    '3._DOFIELD_7'  => "MAX(IF (v.dopfield_id = 7, v.field_value, '')) AS field_7",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 8, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 8, k.field_name, ''))",
        '3.ADDRESS_FLAT'  => "MAX(IF (v.dopfield_id = 8, v.field_value, '')) AS address_flat",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 9, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 9, k.field_name, ''))",
        '3.PHONE'  => "MAX(IF (v.dopfield_id = 9, v.field_value, '')) AS phone",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 10, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 10, k.field_name, ''))",
        '3._COMMENTS'  => "MAX(IF (v.dopfield_id = 10, v.field_value, '')) AS comments",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 11, k.field_name, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 11, v.field_value, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 12, k.field_name, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 12, v.field_value, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 13, k.field_name, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 13, v.field_value, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 11, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 11, v.field_value, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 12, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 12, v.field_value, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 13, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 13, v.field_value, ''))",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 14, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 14, k.field_name, ''))",
        '3._CHECK_LINE'  => "MAX(IF (v.dopfield_id = 14, v.field_value, '')) AS check_line",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 15, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 15, k.field_name, ''))",
        '3.PASSPORT_NUM'  => "MAX(IF (v.dopfield_id = 15, v.field_value, '')) AS passport_num",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 16, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 16, k.field_name, ''))",
        '3.INN'  => "MAX(IF (v.dopfield_id = 16, v.field_value, '')) AS inn",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 17, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 17, k.field_name, ''))",
        '3.REG_ADDRESS'  => "MAX(IF (v.dopfield_id = 17, v.field_value, '')) AS reg_address",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 18, k.field_name, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 18, v.field_value, ''))",
+       
+       #'3.'  => "MAX(IF (v.dopfield_id = 18, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 18, v.field_value, ''))",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 19, k.field_name, ''))",
+       
+       #'3.'  => "MAX(IF (v.dopfield_id = 19, k.field_name, ''))",
        '3.EMAIL'  => "MAX(IF (v.dopfield_id = 19, v.field_value, '')) AS email",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 20, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 20, k.field_name, ''))",
        '3._PON'  => "MAX(IF (v.dopfield_id = 20, v.field_value, '')) AS _pon",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 21, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 21, k.field_name, ''))",
        '3.ADDRESS_BLOCK'  => "MAX(IF (v.dopfield_id = 21, v.field_value, '')) AS address_block",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 22, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 22, k.field_name, ''))",
        '3._SKIP_SMS'  => "MAX(IF (v.dopfield_id = 22, v.field_value, '')) AS skip_sms",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 23, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 23, k.field_name, ''))",
        '3._PHONE2'  => "MAX(IF (v.dopfield_id = 23, v.field_value, '')) AS phone2",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 24, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 24, k.field_name, ''))",
        '3._IPTV_MAC'  => "MAX(IF (v.dopfield_id = 24, v.field_value, '')) as iptv_mac",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 25, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 25, k.field_name, ''))",
        '3.SWITCH_PASSWORD'  => "MAX(IF (v.dopfield_id = 25, v.field_value, '')) AS switch_password",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 26, k.field_name, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 26, v.field_value, ''))",
-       '3.'  => "MAX(IF (v.dopfield_id = 27, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 26, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 26, v.field_value, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 27, k.field_name, ''))",
        '3._PASPORT_INFO'  => "MAX(IF (v.dopfield_id = 27, v.field_value, '')) AS _pasport_info",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 28, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 28, k.field_name, ''))",
        '3._ADS_POINT'  => "MAX(IF (v.dopfield_id = 28, v.field_value, '')) AS _ads_point",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 29, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 29, k.field_name, ''))",
        '3._NEXT_IPTV_TP'  => "MAX(IF (v.dopfield_id = 29, v.field_value, '')) AS _next_iptv_tp",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 30, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 30, k.field_name, ''))",
        '3._MEDIA_PLAYER'  => "MAX(IF (v.dopfield_id = 30, v.field_value, '')) AS _media_player",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 31, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 31, k.field_name, ''))",
        '3._ROUTER'  => "MAX(IF (v.dopfield_id = 31, v.field_value, '')) AS _router",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 32, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 32, k.field_name, ''))",
        '3._NEXT_INTERNET_TP'  => "MAX(IF (v.dopfield_id = 32, v.field_value, '')) AS next_internet_tp",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 33, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 33, k.field_name, ''))",
        '3._CONNECT_PRICE'  => "MAX(IF (v.dopfield_id = 33, v.field_value, '')) AS _connect_price",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 34, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 34, k.field_name, ''))",
        '3._BUILD_TYPE'  => "MAX(IF (v.dopfield_id = 34, v.field_value, ''))  AS _build_type",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 35, k.field_name, ''))",
+       
+       #'3.'  => "MAX(IF (v.dopfield_id = 35, k.field_name, ''))",
        '3._USER_TYPE'  => "MAX(IF (v.dopfield_id = 35, v.field_value, '')) AS _user_type",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 36, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 36, k.field_name, ''))",
        '3._REFERRER'  => "MAX(IF (v.dopfield_id = 36, v.field_value, '')) AS _referrer",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 37, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 37, k.field_name, ''))",
        '3._IPTV_TP'  => "MAX(IF (v.dopfield_id = 37, v.field_value, '')) AS _iptv_tp",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 38, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 38, k.field_name, ''))",
        '3._SPEED_CONNECT'  => "MAX(IF (v.dopfield_id = 38, v.field_value, '')) AS _speed_connect",
 
-       '3.'  => "MAX(IF (v.dopfield_id = 39, k.field_name, ''))",
+       #'3.'  => "MAX(IF (v.dopfield_id = 39, k.field_name, ''))",
        '3._CPE_UNITS'  => "MAX(IF (v.dopfield_id = 39, v.field_value, '')) AS _cpe_units",
 
 
@@ -2743,14 +2735,24 @@ sub get_nodeny {
     $fields_rev{$1}=$fields_rev{$key};
   }
 
+  my $WHERE = q{};
+
+  if ($argv->{ID} && $argv->{ID}=~/(\d+)\-(\d+)/) {
+    $WHERE .= qq{ AND ( u.id >= $1 AND u.id <= $2 )  };
+  }
+
   my $sql = "SELECT $fields_list
     FROM users u
-    LEFT JOIN dopvalues v ON (v.parent_id=u.id)
+    LEFT OUTER JOIN dopvalues v ON (v.parent_id=u.id)
     LEFT JOIN dopfields k ON (k.id=v.dopfield_id)
     LEFT JOIN p_street s ON (s.street=v.field_value)
+    WHERE 
+      v.line_id = (SELECT max(line_id) FROM dopvalues WHERE v.parent_id=parent_id AND v.dopfield_id=dopfield_id GROUP BY parent_id )
+      $WHERE
     GROUP BY u.id
+    ORDER BY u.id
   ";
-
+  `echo "$sql" >> /tmp/sql`;
   #print $sql;
   if ($DEBUG > 4) {
     print $sql;
@@ -2759,6 +2761,8 @@ sub get_nodeny {
   elsif ($DEBUG > 0) {
     print "$sql\n";
   }
+
+
   my DBI $q = $db->prepare($sql);
   $q->execute();
   my $query_fields = $q->{NAME};
