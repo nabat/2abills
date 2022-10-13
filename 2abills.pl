@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.15
-  UPDATE: 20220926
+  VERSION: 1.17
+  UPDATE: 20221012
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.15;
+my $VERSION = 1.17;
 our (%conf);
 
 #DB information
@@ -2720,13 +2720,6 @@ sub get_nodeny {
     #  '6.PASSWORD'			=> 'email_pass',
   );
 
-
-  #Extra fields
-  #dopfields
-  #  dop_fields table: p_street
-  # Значення зберігаються в таблиці dopvalues
-  #  (як актуальні дані так і історія зберігається в тій же таблиці, для цього передбачене поле revision. чим більший тим новіший запис. найбільший для конкретного абонента і є актуальним)
-
   my %fields_rev = reverse(%fields);
   my $fields_list = "name, " . join(", \n", values(%fields));
 
@@ -2740,6 +2733,9 @@ sub get_nodeny {
   if ($argv->{ID} && $argv->{ID}=~/(\d+)\-(\d+)/) {
     $WHERE .= qq{ AND ( u.id >= $1 AND u.id <= $2 )  };
   }
+  elsif($argv->{NOT_GRP} && $argv->{NOT_GRP}) {
+    $WHERE .= qq{ AND ( u.grp NOT IN ($argv->{NOT_GRP})  )  };
+  }
 
   my $sql = "SELECT $fields_list
     FROM users u
@@ -2752,7 +2748,7 @@ sub get_nodeny {
     GROUP BY u.id
     ORDER BY u.id
   ";
-  `echo "$sql" >> /tmp/sql`;
+  #`echo "$sql" >> /tmp/sql`;
   #print $sql;
   if ($DEBUG > 4) {
     print $sql;
@@ -2778,7 +2774,15 @@ sub get_nodeny {
         print "$i, $query_fields->[$i], " . ($fields_rev{$query_fields->[$i]} || q{}). " ->  ". ($row[$i]  || q{}) ."\n";
       }
 
-      $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
+      if ($query_fields->[$i] eq 'srvs') {
+        my $services = get_dop_usluga($row[$i]);
+        if ($services && $#{ $services } > -1) {
+          $logins_hash{$LOGIN}{'9.TP_NAMES'} = join(',', @$services);
+        }
+      }
+      else {
+        $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
+      }
     }
 
     if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
@@ -2797,6 +2801,40 @@ sub get_nodeny {
 
   undef($q);
   return \%logins_hash;
+}
+
+
+#**********************************************************
+=head2 get_dop_usluga($value) -
+
+=cut
+#**********************************************************
+sub get_dop_usluga {
+  my ($value) = @_;
+  my @usluga = ();
+
+  if (! $value) {
+    return \@usluga;
+  }
+
+  my $value2 = log($value) / log(2) +1;
+  my $count = int($value2);
+  my @usluga_number = ();
+
+  for (my $i=$count; $i>=1; $i--) {
+    if ($value - 2 ** ($i-1) >= 0) {
+      $usluga[$i] = 1;
+      $value = $value - 2 ** ($i-1);
+      push @usluga_number, $i;
+    }
+    else {
+      $usluga[$i] = 0;
+    }
+  }
+
+  shift @usluga;
+
+  return \@usluga_number;
 }
 
 #**********************************************************
