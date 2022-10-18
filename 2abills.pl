@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.17
-  UPDATE: 20221012
+  VERSION: 1.18
+  UPDATE: 20221018
 
 =cut
 
@@ -2548,7 +2548,7 @@ sub get_nodeny {
     '1.UID',             => 'u.id',
     'LOGIN'              => 'name',
     'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\') AS password",
-    '1.ACTIVATE'         => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\') AS activate',
+    '3.CONTRACT_DATE'    => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\') AS activate',
 
     #  '1.EXPIRE'			=> 'expired',
     #  '1.COMPANY_ID'		=> '',
@@ -2597,7 +2597,7 @@ sub get_nodeny {
     #'3._DOPFIELD_3'  => "MAX(IF (v.dopfield_id = 3, k.field_name, ''))",
     '3._TCP_24'  => "MAX(IF (v.dopfield_id = 3, v.field_value, '')) AS _tcp_25",
     #'3.'  => "MAX(IF (v.dopfield_id = 4, k.field_name, ''))",
-    '3.MAC'  => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
+    '4.CID'  => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
     #'3.'  => "MAX(IF (v.dopfield_id = 5, k.field_name, ''))",
     '3._FIELD_5'  => "MAX(IF (v.dopfield_id = 5, v.field_value, '')) AS field_5",
     '3.ADDRESS_STREET'  => "MAX(IF (v.dopfield_id = 5, s.name_street, ''))  AS address_street",
@@ -2627,10 +2627,10 @@ sub get_nodeny {
        '3._CHECK_LINE'  => "MAX(IF (v.dopfield_id = 14, v.field_value, '')) AS check_line",
 
        #'3.'  => "MAX(IF (v.dopfield_id = 15, k.field_name, ''))",
-       '3.PASSPORT_NUM'  => "MAX(IF (v.dopfield_id = 15, v.field_value, '')) AS passport_num",
+       '3.PASPORT_NUM'  => "MAX(IF (v.dopfield_id = 15, v.field_value, '')) AS passport_num",
 
        #'3.'  => "MAX(IF (v.dopfield_id = 16, k.field_name, ''))",
-       '3.INN'  => "MAX(IF (v.dopfield_id = 16, v.field_value, '')) AS inn",
+       '3.TAX_NUMBER'  => "MAX(IF (v.dopfield_id = 16, v.field_value, '')) AS inn",
 
        #'3.'  => "MAX(IF (v.dopfield_id = 17, k.field_name, ''))",
        '3.REG_ADDRESS'  => "MAX(IF (v.dopfield_id = 17, v.field_value, '')) AS reg_address",
@@ -2779,6 +2779,11 @@ sub get_nodeny {
         if ($services && $#{ $services } > -1) {
           $logins_hash{$LOGIN}{'9.TP_NAMES'} = join(',', @$services);
         }
+      }
+      elsif ($query_fields->[$i] eq 'address_street') {
+        my($city, $street)=split(/ вул./, $logins_hash{$LOGIN}{'3.ADDRESS_STREET'});
+        $logins_hash{$LOGIN}{'3.ADDRESS_STREET'} = $street;
+        $logins_hash{$LOGIN}{'3.CITY'} = $city;
       }
       else {
         $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
