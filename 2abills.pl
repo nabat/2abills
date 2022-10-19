@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.18
-  UPDATE: 20221018
+  VERSION: 1.20
+  UPDATE: 20221019
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.17;
+my $VERSION = 1.20;
 our (%conf);
 
 #DB information
@@ -2546,7 +2546,7 @@ sub get_nodeny {
 
   my %fields = (
     '1.UID',             => 'u.id',
-    'LOGIN'              => 'name',
+    'LOGIN'              => 'u.name',
     'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\') AS password",
     '3.CONTRACT_DATE'    => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\') AS activate',
 
@@ -2579,6 +2579,7 @@ sub get_nodeny {
     #  '4.SIMULTANEONSLY'	=> 'simultaneous_use',
     #  '4.SPEED'			=> 'speed',
     '4.TP_ID'            => 'paket',
+    '4.TP_NAME'          => 'internet_tp.name AS internet_tp_name',
 
     #  '4.CALLBACK'			=> 'allow_callback',
 
@@ -2587,6 +2588,7 @@ sub get_nodeny {
     '3._EXTRA_SERVICE'   => 'srvs',
     '3._NEXT_PAKET'      => 'next_paket',
     '11.TP_ID'           => 'paket3',
+    '11.TP_NAME'         => 'iptv_tp.name AS iptv_tp_name',
     '11.CHANGE_TP_NAME', => 'next_paket3',
     #'11.CHANGE_TP_DATE'  => '',
 
@@ -2721,7 +2723,7 @@ sub get_nodeny {
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "name, " . join(", \n", values(%fields));
+  my $fields_list = "u.name, " . join(", \n", values(%fields));
 
   foreach my $key (keys %fields_rev) {
     $key =~ /([a-z\_0-9]+)$/i;
@@ -2742,6 +2744,8 @@ sub get_nodeny {
     LEFT OUTER JOIN dopvalues v ON (v.parent_id=u.id)
     LEFT JOIN dopfields k ON (k.id=v.dopfield_id)
     LEFT JOIN p_street s ON (s.street=v.field_value)
+    LEFT JOIN plans2 internet_tp ON (internet_tp.id=u.paket)
+    LEFT JOIN plans3 iptv_tp ON (iptv_tp.id=u.paket3)
     WHERE 
       v.line_id = (SELECT max(line_id) FROM dopvalues WHERE v.parent_id=parent_id AND v.dopfield_id=dopfield_id GROUP BY parent_id )
       $WHERE
