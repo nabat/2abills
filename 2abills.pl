@@ -2785,7 +2785,7 @@ sub get_nodeny {
         }
       }
       elsif ($query_fields->[$i] eq 'address_street') {
-        my($city, $street)=split(/ вул./, $logins_hash{$LOGIN}{'3.ADDRESS_STREET'});
+        my($city, $street)=split(/ вул./, $row[$i] || q{});
         $logins_hash{$LOGIN}{'3.ADDRESS_STREET'} = $street;
         $logins_hash{$LOGIN}{'3.CITY'} = $city;
       }
