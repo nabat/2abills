@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.20
-  UPDATE: 20221019
+  VERSION: 1.21
+  UPDATE: 20221020
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.20;
+my $VERSION = 1.21;
 our (%conf);
 
 #DB information
@@ -2578,7 +2578,7 @@ sub get_nodeny {
     #  '4.NETMASK'			=> 'framed_mask',
     #  '4.SIMULTANEONSLY'	=> 'simultaneous_use',
     #  '4.SPEED'			=> 'speed',
-    '4.TP_ID'            => 'paket',
+    #'4.TP_ID'            => 'paket',
     '4.TP_NAME'          => 'internet_tp.name AS internet_tp_name',
 
     #  '4.CALLBACK'			=> 'allow_callback',
@@ -2587,7 +2587,7 @@ sub get_nodeny {
 
     '3._EXTRA_SERVICE'   => 'srvs',
     '3._NEXT_PAKET'      => 'next_paket',
-    '11.TP_ID'           => 'paket3',
+    #'11.TP_ID'           => 'paket3',
     '11.TP_NAME'         => 'iptv_tp.name AS iptv_tp_name',
     '11.CHANGE_TP_NAME', => 'next_paket3',
     #'11.CHANGE_TP_DATE'  => '',
