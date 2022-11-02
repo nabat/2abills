@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.21
-  UPDATE: 20221020
+  VERSION: 1.22
+  UPDATE: 20221102
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.21;
+my $VERSION = 1.22;
 our (%conf);
 
 #DB information
@@ -2586,7 +2586,10 @@ sub get_nodeny {
     '5.SUM'              => 'balance',
 
     '3._EXTRA_SERVICE'   => 'srvs',
-    '3._NEXT_PAKET'      => 'next_paket',
+    '3._NEXT_PAKET'      => 'u.next_paket',
+    '13.DATE'            => "if (next_paket>0, DATE_FORMAT(CURDATE()+INTERVAL 1 MONTH, '%Y-%m-01'), '') AS shedule_date",
+    '13.TP_NAME'         => "if (next_paket>0, internet_tp_next.name, '') AS shedule_tp_name",
+
     #'11.TP_ID'           => 'paket3',
     '11.TP_NAME'         => 'iptv_tp.name AS iptv_tp_name',
     '11.CHANGE_TP_NAME', => 'next_paket3',
@@ -2746,6 +2749,7 @@ sub get_nodeny {
     LEFT JOIN p_street s ON (s.street=v.field_value)
     LEFT JOIN plans2 internet_tp ON (internet_tp.id=u.paket)
     LEFT JOIN plans3 iptv_tp ON (iptv_tp.id=u.paket3)
+    LEFT JOIN plans2 internet_tp_next ON (internet_tp_next.id=u.next_paket)
     WHERE 
       v.line_id = (SELECT max(line_id) FROM dopvalues WHERE v.parent_id=parent_id AND v.dopfield_id=dopfield_id GROUP BY parent_id )
       $WHERE
