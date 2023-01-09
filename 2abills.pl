@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.22
-  UPDATE: 20221102
+  VERSION: 1.28
+  UPDATE: 20221119
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.22;
+my $VERSION = 1.28;
 our (%conf);
 
 #DB information
@@ -1597,7 +1597,7 @@ sub all_columns {
   my ($logins_info) = @_;
   my %columns;
   foreach my $login (values %$logins_info){
-    foreach(keys %$login){
+    foreach(sort keys %$login){
       $columns{$_}=1;
     }
   };
@@ -1627,6 +1627,12 @@ sub show {
     'PASSWORD' => 2
   );
 
+  if ($argv->{SKIP_FIELDS}) {
+    foreach my $field (split(/,\s?/, $argv->{SKIP_FIELDS})) {
+      $exaption{$field}=1;
+    }
+  }
+
   my @titles = sort keys %$logins_info;
 
   if ($#titles == -1) {
@@ -1643,7 +1649,11 @@ sub show {
   }
 
   if ($FORMAT eq 'html') {
-    $output = "<table border=1>\n" . "<tr><th>LOGIN</th>
+    if ($argv->{HEADER}) {
+      $output = $argv->{HEADER};
+    }
+
+    $output .= "<table border=1>\n" . "<tr><th>LOGIN</th>
 	<th>PASSWORD</th>\n";
 
     foreach my $column_title (@titles) {
@@ -1686,7 +1696,7 @@ sub show {
           $value = Encode::encode('utf8', Encode::decode('cp1251', $value));
         }
 
-        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
+        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE|DATE/) {
           $value = _date_convert($value);
         }
 
@@ -1712,7 +1722,7 @@ sub show {
           $value = $TP_MIGRATION{ $value };
         }
 
-        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE/) {
+        if ($column_title =~ /CONTRACT_DATE|REGISTRATION|PASPORT_DATE|DATE/) {
           $value = _date_convert($value);
         }
         elsif ($column_title =~ /COMMENTS/) {
@@ -2544,185 +2554,274 @@ sub get_nodeny {
 
   $encryption_key = "hardpass3" if (!$encryption_key);
 
+  # my %fields = (
+  #   '1.UID',             => 'u.id',
+  #   'LOGIN'              => 'u.name',
+  #   'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\') AS password",
+  #   '3.CONTRACT_DATE'    => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\') AS activate',
+  #
+  #   #  '1.EXPIRE'			=> 'expired',
+  #   #  '1.COMPANY_ID'		=> '',
+  #   #  '1.CREDIT'			=> 'credit',
+  #   '1.GID'              => 'grp',
+  #   '1.REDUCTION'        => 'discount',
+  #
+  #   #  '1.REGISTRATION'		=> 'add_date',
+  #   #  '1.DISABLE'			=> 'blocked',
+  #
+  #   #  '3.ADDRESS_FLAT'		=> 'app',
+  #   #  '3.ADDRESS_STREET'	=> 'address',
+  #   #  '3.ADDRESS_BUILD'		=> 'houseid',
+  #   '3.COMMENTS'         => 'u.comment',
+  #   '3.CONTRACT_ID'      => 'contract',
+  #
+  #   #  '3.EMAIL'				=> 'email',
+  #   '3.FIO'              => 'fio',
+  #
+  #   #  '5.PASPORT_GRANT'		=> 'passportserie',
+  #   #  '3.PHONE'				=> 'mob_tel',
+  #
+  #   #  '4.CID'				=> '',
+  #   #  '4.FILTER_ID'		=> '',
+  #   '4.IP'               => 'ip',
+  #
+  #   #  '4.NETMASK'			=> 'framed_mask',
+  #   #  '4.SIMULTANEONSLY'	=> 'simultaneous_use',
+  #   #  '4.SPEED'			=> 'speed',
+  #   #'4.TP_ID'            => 'paket',
+  #   '4.TP_NAME'          => 'internet_tp.name AS internet_tp_name',
+  #
+  #   #  '4.CALLBACK'			=> 'allow_callback',
+  #
+  #   '5.SUM'              => 'balance',
+  #
+  #   '3._EXTRA_SERVICE'   => 'srvs',
+  #   '3._NEXT_PAKET'      => 'u.next_paket',
+  #   '13.DATE'            => "if (next_paket>0, DATE_FORMAT(CURDATE()+INTERVAL 1 MONTH, '%Y-%m-01'), substring_index(pays.reason, ':', 1)) AS shedule_date",
+  #    '13.TP_NAME'         => "if (next_paket>0, internet_tp_next.name, internet_tp_shedule.name) AS shedule_tp_name",
+
+  #   #'11.TP_ID'           => 'paket3',
+  #   '11.TP_NAME'         => 'iptv_tp.name AS iptv_tp_name',
+  #   '11.CHANGE_TP_NAME', => 'next_paket3',
+  #   #'11.CHANGE_TP_DATE'  => '',
+  #
+  #   #'3._DOPFIELD_1'  => "MAX(IF (v.dopfield_id = 1, k.field_name, ''))",
+  #   '3.SPEED_IN'  => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
+  #   #'3._DOPFIELD_2'  => "MAX(IF (v.dopfield_id = 2, k.field_name, ''))",
+  #   '3.SPEED_OUT'  => "MAX(IF (v.dopfield_id = 2, v.field_value, '')) AS _speed_out",
+  #   #'3._DOPFIELD_3'  => "MAX(IF (v.dopfield_id = 3, k.field_name, ''))",
+  #   '3._TCP_24'  => "MAX(IF (v.dopfield_id = 3, v.field_value, '')) AS _tcp_25",
+  #   #'3.'  => "MAX(IF (v.dopfield_id = 4, k.field_name, ''))",
+  #   '4.CID'  => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
+  #   #'3.'  => "MAX(IF (v.dopfield_id = 5, k.field_name, ''))",
+  #   '3._FIELD_5'  => "MAX(IF (v.dopfield_id = 5, v.field_value, '')) AS field_5",
+  #   '3.ADDRESS_STREET'  => "MAX(IF (v.dopfield_id = 5, s.name_street, ''))  AS address_street",
+  #   #'3.'  => "MAX(IF (v.dopfield_id = 6, k.field_name, ''))",
+  #   '3.ADDRESS_BUILD'  => "MAX(IF (v.dopfield_id = 6, v.field_value, '')) AS address_build",
+  #
+  #   #'3.'  => "MAX(IF (v.dopfield_id = 7, k.field_name, ''))",
+  #   '3._DOFIELD_7'  => "MAX(IF (v.dopfield_id = 7, v.field_value, '')) AS field_7",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 8, k.field_name, ''))",
+  #      '3.ADDRESS_FLAT'  => "MAX(IF (v.dopfield_id = 8, v.field_value, '')) AS address_flat",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 9, k.field_name, ''))",
+  #      '3.PHONE'  => "MAX(IF (v.dopfield_id = 9, v.field_value, '')) AS phone",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 10, k.field_name, ''))",
+  #      '3._COMMENTS'  => "MAX(IF (v.dopfield_id = 10, v.field_value, '')) AS comments",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 11, k.field_name, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 11, v.field_value, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 12, k.field_name, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 12, v.field_value, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 13, k.field_name, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 13, v.field_value, ''))",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 14, k.field_name, ''))",
+  #      '3._CHECK_LINE'  => "MAX(IF (v.dopfield_id = 14, v.field_value, '')) AS check_line",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 15, k.field_name, ''))",
+  #      '3.PASPORT_NUM'  => "MAX(IF (v.dopfield_id = 15, v.field_value, '')) AS passport_num",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 16, k.field_name, ''))",
+  #      '3.TAX_NUMBER'  => "MAX(IF (v.dopfield_id = 16, v.field_value, '')) AS inn",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 17, k.field_name, ''))",
+  #      '3.REG_ADDRESS'  => "MAX(IF (v.dopfield_id = 17, v.field_value, '')) AS reg_address",
+  #
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 18, k.field_name, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 18, v.field_value, ''))",
+  #
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 19, k.field_name, ''))",
+  #      '3.EMAIL'  => "MAX(IF (v.dopfield_id = 19, v.field_value, '')) AS email",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 20, k.field_name, ''))",
+  #      '3._PON'  => "MAX(IF (v.dopfield_id = 20, v.field_value, '')) AS _pon",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 21, k.field_name, ''))",
+  #      '3.ADDRESS_BLOCK'  => "MAX(IF (v.dopfield_id = 21, v.field_value, '')) AS address_block",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 22, k.field_name, ''))",
+  #      '3._SKIP_SMS'  => "MAX(IF (v.dopfield_id = 22, v.field_value, '')) AS skip_sms",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 23, k.field_name, ''))",
+  #      '3._PHONE2'  => "MAX(IF (v.dopfield_id = 23, v.field_value, '')) AS phone2",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 24, k.field_name, ''))",
+  #      '3._IPTV_MAC'  => "MAX(IF (v.dopfield_id = 24, v.field_value, '')) as iptv_mac",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 25, k.field_name, ''))",
+  #      '3.SWITCH_PASSWORD'  => "MAX(IF (v.dopfield_id = 25, v.field_value, '')) AS switch_password",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 26, k.field_name, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 26, v.field_value, ''))",
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 27, k.field_name, ''))",
+  #      '3._PASPORT_INFO'  => "MAX(IF (v.dopfield_id = 27, v.field_value, '')) AS _pasport_info",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 28, k.field_name, ''))",
+  #      '3._ADS_POINT'  => "MAX(IF (v.dopfield_id = 28, v.field_value, '')) AS _ads_point",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 29, k.field_name, ''))",
+  #      '3._NEXT_IPTV_TP'  => "MAX(IF (v.dopfield_id = 29, v.field_value, '')) AS _next_iptv_tp",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 30, k.field_name, ''))",
+  #      '3._MEDIA_PLAYER'  => "MAX(IF (v.dopfield_id = 30, v.field_value, '')) AS _media_player",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 31, k.field_name, ''))",
+  #      '3._ROUTER'  => "MAX(IF (v.dopfield_id = 31, v.field_value, '')) AS _router",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 32, k.field_name, ''))",
+  #      '3._NEXT_INTERNET_TP'  => "MAX(IF (v.dopfield_id = 32, v.field_value, '')) AS next_internet_tp",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 33, k.field_name, ''))",
+  #      '3._CONNECT_PRICE'  => "MAX(IF (v.dopfield_id = 33, v.field_value, '')) AS _connect_price",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 34, k.field_name, ''))",
+  #      '3._BUILD_TYPE'  => "MAX(IF (v.dopfield_id = 34, v.field_value, ''))  AS _build_type",
+  #
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 35, k.field_name, ''))",
+  #      '3._USER_TYPE'  => "MAX(IF (v.dopfield_id = 35, v.field_value, '')) AS _user_type",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 36, k.field_name, ''))",
+  #      '3._REFERRER'  => "MAX(IF (v.dopfield_id = 36, v.field_value, '')) AS _referrer",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 37, k.field_name, ''))",
+  #      '3._IPTV_TP'  => "MAX(IF (v.dopfield_id = 37, v.field_value, '')) AS _iptv_tp",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 38, k.field_name, ''))",
+  #      '3._SPEED_CONNECT'  => "MAX(IF (v.dopfield_id = 38, v.field_value, '')) AS _speed_connect",
+  #
+  #      #'3.'  => "MAX(IF (v.dopfield_id = 39, k.field_name, ''))",
+  #      '3._CPE_UNITS'  => "MAX(IF (v.dopfield_id = 39, v.field_value, '')) AS _cpe_units",
+  #
+  #
+  #   #  '5.DESCRIBE'			=> "'Migration'",
+  #   #  '5.ER'				=> undef,
+  #   #  '5.EXT_ID'			=> undef,
+  #
+  #   #  '6.USERNAME'			=> 'email',
+  #   #  '6.DOMAINS_SEL'		=> $email_domain_id || 0,
+  #   #  '6.COMMENTS'			=> '',
+  #   #  '6.MAILS_LIMIT'		=> 0,
+  #   #  '6.BOX_SIZE'			=> 0,
+  #   #  '6.ANTIVIRUS'		=> 0,
+  #   #  '6.ANTISPAM'			=> 0,
+  #   #  '6.DISABLE'          => 0,
+  #   #  '6.EXPIRE'			=> undef,
+  #   #  '6.PASSWORD'			=> 'email_pass',
+  # );
+
   my %fields = (
     '1.UID',             => 'u.id',
     'LOGIN'              => 'u.name',
     'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\') AS password",
     '3.CONTRACT_DATE'    => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\') AS activate',
-
-    #  '1.EXPIRE'			=> 'expired',
-    #  '1.COMPANY_ID'		=> '',
-    #  '1.CREDIT'			=> 'credit',
-    '1.GID'              => 'grp',
-    '1.REDUCTION'        => 'discount',
-
-    #  '1.REGISTRATION'		=> 'add_date',
-    #  '1.DISABLE'			=> 'blocked',
-
-    #  '3.ADDRESS_FLAT'		=> 'app',
-    #  '3.ADDRESS_STREET'	=> 'address',
-    #  '3.ADDRESS_BUILD'		=> 'houseid',
+    '1.GID'              => 'u.grp',
+    '1.GID_NAME',        => 'user_grp.grp_name',
+    '1.REDUCTION'        => 'u.discount',
     '3.COMMENTS'         => 'u.comment',
-    '3.CONTRACT_ID'      => 'contract',
-
-    #  '3.EMAIL'				=> 'email',
-    '3.FIO'              => 'fio',
-
-    #  '5.PASPORT_GRANT'		=> 'passportserie',
-    #  '3.PHONE'				=> 'mob_tel',
-
-    #  '4.CID'				=> '',
-    #  '4.FILTER_ID'		=> '',
-    '4.IP'               => 'ip',
+    '3.CONTRACT_ID'      => 'u.contract',
+    '3.FIO'              => 'u.fio',
+    '4.IP'               => 'u.ip',
 
     #  '4.NETMASK'			=> 'framed_mask',
     #  '4.SIMULTANEONSLY'	=> 'simultaneous_use',
     #  '4.SPEED'			=> 'speed',
     #'4.TP_ID'            => 'paket',
     '4.TP_NAME'          => 'internet_tp.name AS internet_tp_name',
+    '5.SUM'              => 'u.balance',
 
-    #  '4.CALLBACK'			=> 'allow_callback',
-
-    '5.SUM'              => 'balance',
-
-    '3._EXTRA_SERVICE'   => 'srvs',
+    '3._EXTRA_SERVICE'   => 'u.srvs',
     '3._NEXT_PAKET'      => 'u.next_paket',
     '13.DATE'            => "if (next_paket>0, DATE_FORMAT(CURDATE()+INTERVAL 1 MONTH, '%Y-%m-01'), '') AS shedule_date",
     '13.TP_NAME'         => "if (next_paket>0, internet_tp_next.name, '') AS shedule_tp_name",
 
-    #'11.TP_ID'           => 'paket3',
-    '11.TP_NAME'         => 'iptv_tp.name AS iptv_tp_name',
+    '11.TP_ID'           => 'u.paket3',
+    '11.TP_NAME'         => 'IF(iptv_tp.name IS null, iptv_megogo.name, iptv_tp.name) AS iptv_tp_name',
     '11.CHANGE_TP_NAME', => 'next_paket3',
-    #'11.CHANGE_TP_DATE'  => '',
+    # '11.CHANGE_TP_DATE'  => '',
+    # '11.SERVICE_ID'      => '',
+    '11.SUBSCRIBE_ID'    => 'iptv_device.uuid',
+    # '11.CID'             => '',
+    # '11,PIN'             => '',
+    # '11.STATUS'          => '',
+    '11.PLAYLIST'        => 'iptv_device.url',
 
     #'3._DOPFIELD_1'  => "MAX(IF (v.dopfield_id = 1, k.field_name, ''))",
-    '3.SPEED_IN'  => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
-    #'3._DOPFIELD_2'  => "MAX(IF (v.dopfield_id = 2, k.field_name, ''))",
-    '3.SPEED_OUT'  => "MAX(IF (v.dopfield_id = 2, v.field_value, '')) AS _speed_out",
-    #'3._DOPFIELD_3'  => "MAX(IF (v.dopfield_id = 3, k.field_name, ''))",
-    '3._TCP_24'  => "MAX(IF (v.dopfield_id = 3, v.field_value, '')) AS _tcp_25",
+    # '3.SPEED_IN'         => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
+    # '3.SPEED_OUT'        => "MAX(IF (v.dopfield_id = 2, v.field_value, '')) AS _speed_out",
+
     #'3.'  => "MAX(IF (v.dopfield_id = 4, k.field_name, ''))",
-    '4.CID'  => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
-    #'3.'  => "MAX(IF (v.dopfield_id = 5, k.field_name, ''))",
-    '3._FIELD_5'  => "MAX(IF (v.dopfield_id = 5, v.field_value, '')) AS field_5",
-    '3.ADDRESS_STREET'  => "MAX(IF (v.dopfield_id = 5, s.name_street, ''))  AS address_street",
-    #'3.'  => "MAX(IF (v.dopfield_id = 6, k.field_name, ''))",
-    '3.ADDRESS_BUILD'  => "MAX(IF (v.dopfield_id = 6, v.field_value, '')) AS address_build",
+    '4.CID'            => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
+    '3.ADDRESS_STREET' => "MAX(IF (v.dopfield_id = 21, s.name_street, '')) AS address_street",
+    '3._DISTRICT'      => "r.name AS district",
+    '3.ADDRESS_BUILD'  => "MAX(IF (v.dopfield_id = 22, v.field_value, '')) AS address_build",
+    '3.FLOOR'          => "MAX(IF (v.dopfield_id = 23, v.field_value, '')) AS floor",
+    '3.ADDRESS_FLAT'   => "MAX(IF (v.dopfield_id = 24, v.field_value, '')) AS address_flat",
+    '3._COMMENTS'      => "MAX(IF (v.dopfield_id = 26, v.field_value, '')) AS comments",
+    '3.ENTRANCE'       => "MAX(IF (v.dopfield_id = 28, v.field_value, '')) AS entrance",
 
-    #'3.'  => "MAX(IF (v.dopfield_id = 7, k.field_name, ''))",
-    '3._DOFIELD_7'  => "MAX(IF (v.dopfield_id = 7, v.field_value, '')) AS field_7",
+    '3.PASPORT_NUM'    => "MAX(IF (v.dopfield_id = 85, v.field_value, '')) AS passport_num",
+    '3.PASPORT_GRANT'  => "MAX(IF (v.dopfield_id = 86, v.field_value, '')) AS passport_grant",
+    '3.PASPORT_DATE'   => "MAX(IF (v.dopfield_id = 87, v.field_value, '')) AS passport_date",
 
-       #'3.'  => "MAX(IF (v.dopfield_id = 8, k.field_name, ''))",
-       '3.ADDRESS_FLAT'  => "MAX(IF (v.dopfield_id = 8, v.field_value, '')) AS address_flat",
+    '3.REG_ADDRESS'    => "MAX(IF (v.dopfield_id = 88, v.field_value, '')) AS reg_address",
+    '3.EMAIL'          => "MAX(IF (v.dopfield_id = 54, v.field_value, '')) AS email",
+    '3.EMAIL'          => "MAX(IF (v.dopfield_id = 58, v.field_value, '')) AS email2",
+    '3._SKIP_SMS'      => "MAX(IF (v.dopfield_id = 13, v.field_value, '')) AS skip_sms",
+    '3._PHONE2'        => "MAX(IF (v.dopfield_id = 91, v.field_value, '')) AS _phone2",
+    '3._PHONE3'        => "MAX(IF (v.dopfield_id = 14, v.field_value, '')) AS _phone3",
+    '3.PHONE'          => "MAX(IF (v.dopfield_id = 25, v.field_value, '')) AS _phone",
+    '3._CELL_PHONE'    => "MAX(IF (v.dopfield_id = 29, v.field_value, '')) AS _cell_phone",
+    '3._ADDRESS_BLOCK' => "MAX(IF (v.dopfield_id = 27, v.field_value, '')) AS _block",
+    '3._CPE_UNITS'     => "MAX(IF (v.dopfield_id = 20, v.field_value, '')) AS _cpe_units", #Serial
+    '3._SEX'           => "MAX(IF (v.dopfield_id = 32, v.field_value, '')) AS _sex",
+    '3.BIRTH_DATE'     => "MAX(IF (v.dopfield_id = 33, v.field_value, '')) AS _birthday",
+    '3._USER_TYPE'     => "MAX(IF (v.dopfield_id = 35, v.field_value, '')) AS _user_type",
 
-       #'3.'  => "MAX(IF (v.dopfield_id = 9, k.field_name, ''))",
-       '3.PHONE'  => "MAX(IF (v.dopfield_id = 9, v.field_value, '')) AS phone",
+    # NAS
+    '4.NAS_STATUS'     => "MAX(IF (v.dopfield_id = 36, v.field_value, '')) AS nas_status",
+    '4.NAS_IP'         => "MAX(IF (v.dopfield_id = 37, v.field_value, '')) AS nas_ip",
+    '4.NAS_MAC'        => "MAX(IF (v.dopfield_id = 38, v.field_value, '')) AS nas_mac",
+    '4.NAS_NAME'       => "MAX(IF (v.dopfield_id = 79, v.field_value, '')) AS nas_name",
 
-       #'3.'  => "MAX(IF (v.dopfield_id = 10, k.field_name, ''))",
-       '3._COMMENTS'  => "MAX(IF (v.dopfield_id = 10, v.field_value, '')) AS comments",
+    '4.PORT'           => "MAX(IF (v.dopfield_id = 45, v.field_value, '')) AS port",
+    #'4.SERVER_VLAN'    => "MAX(IF (v.dopfield_id = 59, v.field_value, '')) AS server_vlan",
 
-       #'3.'  => "MAX(IF (v.dopfield_id = 11, k.field_name, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 11, v.field_value, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 12, k.field_name, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 12, v.field_value, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 13, k.field_name, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 13, v.field_value, ''))",
+    '4.SERVER_VLAN'    => "vlan2user.high_vlan AS server_vlan",
+    '4.VLAN'           => "vlan2user.low_vlan AS vlan",
+    '4.NAS_IP'         => "switch.ip AS nas_ip",
+    '4.NAS_NAME'       => "switch.name AS nas_name",
+    '4.NAS_DESCRIBE'   => "switch.bras AS bras",
+    '4.NAS_MAC'        => "switch.mac AS nas_mac",
+    '4.NAS_IDENTIFIER' => "switch.serial AS nas_identifier",
 
-       #'3.'  => "MAX(IF (v.dopfield_id = 14, k.field_name, ''))",
-       '3._CHECK_LINE'  => "MAX(IF (v.dopfield_id = 14, v.field_value, '')) AS check_line",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 15, k.field_name, ''))",
-       '3.PASPORT_NUM'  => "MAX(IF (v.dopfield_id = 15, v.field_value, '')) AS passport_num",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 16, k.field_name, ''))",
-       '3.TAX_NUMBER'  => "MAX(IF (v.dopfield_id = 16, v.field_value, '')) AS inn",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 17, k.field_name, ''))",
-       '3.REG_ADDRESS'  => "MAX(IF (v.dopfield_id = 17, v.field_value, '')) AS reg_address",
-
-       
-       #'3.'  => "MAX(IF (v.dopfield_id = 18, k.field_name, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 18, v.field_value, ''))",
-
-       
-       #'3.'  => "MAX(IF (v.dopfield_id = 19, k.field_name, ''))",
-       '3.EMAIL'  => "MAX(IF (v.dopfield_id = 19, v.field_value, '')) AS email",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 20, k.field_name, ''))",
-       '3._PON'  => "MAX(IF (v.dopfield_id = 20, v.field_value, '')) AS _pon",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 21, k.field_name, ''))",
-       '3.ADDRESS_BLOCK'  => "MAX(IF (v.dopfield_id = 21, v.field_value, '')) AS address_block",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 22, k.field_name, ''))",
-       '3._SKIP_SMS'  => "MAX(IF (v.dopfield_id = 22, v.field_value, '')) AS skip_sms",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 23, k.field_name, ''))",
-       '3._PHONE2'  => "MAX(IF (v.dopfield_id = 23, v.field_value, '')) AS phone2",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 24, k.field_name, ''))",
-       '3._IPTV_MAC'  => "MAX(IF (v.dopfield_id = 24, v.field_value, '')) as iptv_mac",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 25, k.field_name, ''))",
-       '3.SWITCH_PASSWORD'  => "MAX(IF (v.dopfield_id = 25, v.field_value, '')) AS switch_password",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 26, k.field_name, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 26, v.field_value, ''))",
-       #'3.'  => "MAX(IF (v.dopfield_id = 27, k.field_name, ''))",
-       '3._PASPORT_INFO'  => "MAX(IF (v.dopfield_id = 27, v.field_value, '')) AS _pasport_info",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 28, k.field_name, ''))",
-       '3._ADS_POINT'  => "MAX(IF (v.dopfield_id = 28, v.field_value, '')) AS _ads_point",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 29, k.field_name, ''))",
-       '3._NEXT_IPTV_TP'  => "MAX(IF (v.dopfield_id = 29, v.field_value, '')) AS _next_iptv_tp",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 30, k.field_name, ''))",
-       '3._MEDIA_PLAYER'  => "MAX(IF (v.dopfield_id = 30, v.field_value, '')) AS _media_player",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 31, k.field_name, ''))",
-       '3._ROUTER'  => "MAX(IF (v.dopfield_id = 31, v.field_value, '')) AS _router",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 32, k.field_name, ''))",
-       '3._NEXT_INTERNET_TP'  => "MAX(IF (v.dopfield_id = 32, v.field_value, '')) AS next_internet_tp",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 33, k.field_name, ''))",
-       '3._CONNECT_PRICE'  => "MAX(IF (v.dopfield_id = 33, v.field_value, '')) AS _connect_price",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 34, k.field_name, ''))",
-       '3._BUILD_TYPE'  => "MAX(IF (v.dopfield_id = 34, v.field_value, ''))  AS _build_type",
-
-       
-       #'3.'  => "MAX(IF (v.dopfield_id = 35, k.field_name, ''))",
-       '3._USER_TYPE'  => "MAX(IF (v.dopfield_id = 35, v.field_value, '')) AS _user_type",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 36, k.field_name, ''))",
-       '3._REFERRER'  => "MAX(IF (v.dopfield_id = 36, v.field_value, '')) AS _referrer",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 37, k.field_name, ''))",
-       '3._IPTV_TP'  => "MAX(IF (v.dopfield_id = 37, v.field_value, '')) AS _iptv_tp",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 38, k.field_name, ''))",
-       '3._SPEED_CONNECT'  => "MAX(IF (v.dopfield_id = 38, v.field_value, '')) AS _speed_connect",
-
-       #'3.'  => "MAX(IF (v.dopfield_id = 39, k.field_name, ''))",
-       '3._CPE_UNITS'  => "MAX(IF (v.dopfield_id = 39, v.field_value, '')) AS _cpe_units",
-
-
-    #  '5.DESCRIBE'			=> "'Migration'",
-    #  '5.ER'				=> undef,
-    #  '5.EXT_ID'			=> undef,
-
-    #  '6.USERNAME'			=> 'email',
-    #  '6.DOMAINS_SEL'		=> $email_domain_id || 0,
-    #  '6.COMMENTS'			=> '',
-    #  '6.MAILS_LIMIT'		=> 0,
-    #  '6.BOX_SIZE'			=> 0,
-    #  '6.ANTIVIRUS'		=> 0,
-    #  '6.ANTISPAM'			=> 0,
-    #  '6.DISABLE'          => 0,
-    #  '6.EXPIRE'			=> undef,
-    #  '6.PASSWORD'			=> 'email_pass',
+    '3._SN_ONU'        => "MAX(IF (v.dopfield_id = 62, v.field_value, '')) AS _sn_onu",
+    '3._ONU_MAC'       => "MAX(IF (v.dopfield_id = 63, v.field_value, '')) AS _onu_mac",
   );
 
   my %fields_rev = reverse(%fields);
@@ -2738,8 +2837,32 @@ sub get_nodeny {
   if ($argv->{ID} && $argv->{ID}=~/(\d+)\-(\d+)/) {
     $WHERE .= qq{ AND ( u.id >= $1 AND u.id <= $2 )  };
   }
+  elsif($argv->{LOGIN}) {
+    $WHERE .= qq{ AND u.name = '$argv->{LOGIN}' };
+  }
   elsif($argv->{NOT_GRP} && $argv->{NOT_GRP}) {
     $WHERE .= qq{ AND ( u.grp NOT IN ($argv->{NOT_GRP})  )  };
+  }
+  elsif($argv->{GROUP_ID}) {
+    $WHERE .= qq{ AND ( u.grp IN ($argv->{GROUP_ID})  )  };
+  }
+
+  my $EXT_TABLES = q{};
+  if ($fields{'4.SERVER_VLAN'}) {
+    $EXT_TABLES .= "LEFT JOIN vlan2user ON (vlan2user.id=u.id) \n";
+    $EXT_TABLES .= "LEFT JOIN p_switch_f switch ON (switch.switch=u.switch) \n";
+  }
+
+  if ($fields{'11.TP_NAME'}) {
+    $EXT_TABLES .= "LEFT JOIN hlstv_device iptv_device ON (iptv_device.mid=u.id) \n";
+    $EXT_TABLES .= "LEFT JOIN usrvs iptv_megogo ON (iptv_megogo.mid=u.id AND iptv_megogo.date_k > unix_timestamp()) \n";
+    #hlstv_packet
+  }
+
+  if ($fields{'13.TP_NAME'}) {
+    $EXT_TABLES .= "LEFT JOIN pays ON (pays.mid=u.id AND pays.category = '431')
+  LEFT JOIN plans2 internet_tp_shedule ON (internet_tp_shedule.id=substring_index(pays.reason, ':', -1))
+  ";
   }
 
   my $sql = "SELECT $fields_list
@@ -2747,11 +2870,17 @@ sub get_nodeny {
     LEFT OUTER JOIN dopvalues v ON (v.parent_id=u.id)
     LEFT JOIN dopfields k ON (k.id=v.dopfield_id)
     LEFT JOIN p_street s ON (s.street=v.field_value)
+    LEFT JOIN regions r ON (r.id=s.region)
     LEFT JOIN plans2 internet_tp ON (internet_tp.id=u.paket)
     LEFT JOIN plans3 iptv_tp ON (iptv_tp.id=u.paket3)
     LEFT JOIN plans2 internet_tp_next ON (internet_tp_next.id=u.next_paket)
+    LEFT JOIN user_grp ON (user_grp.grp_id=u.grp)
+    $EXT_TABLES
     WHERE 
-      v.line_id = (SELECT max(line_id) FROM dopvalues WHERE v.parent_id=parent_id AND v.dopfield_id=dopfield_id GROUP BY parent_id )
+      (v.line_id = (SELECT max(line_id) FROM dopvalues WHERE v.parent_id=parent_id AND v.dopfield_id=dopfield_id GROUP BY parent_id )
+       OR
+       v.line_id IS NULL
+      )
       $WHERE
     GROUP BY u.id
     ORDER BY u.id
@@ -2766,6 +2895,8 @@ sub get_nodeny {
     print "$sql\n";
   }
 
+
+  #$db->do("SET SQL_BIG_SELECTS=1");
 
   my DBI $q = $db->prepare($sql);
   $q->execute();
@@ -2788,11 +2919,14 @@ sub get_nodeny {
           $logins_hash{$LOGIN}{'9.TP_NAMES'} = join(',', @$services);
         }
       }
-      elsif ($query_fields->[$i] eq 'address_street') {
-        my($city, $street)=split(/ вул./, $row[$i] || q{});
-        $logins_hash{$LOGIN}{'3.ADDRESS_STREET'} = $street;
-        $logins_hash{$LOGIN}{'3.CITY'} = $city;
-      }
+      # elsif ($query_fields->[$i] eq 'address_street') {
+      #   if ($row[$i] && $row[$i] =~ /(.+)вул.(.+)/) {
+      #     my $city = $1;
+      #     my $street = $2;
+      #     $logins_hash{$LOGIN}{'3.ADDRESS_STREET'} = $street;
+      #     $logins_hash{$LOGIN}{'3.CITY'} = $city;
+      #   }
+      # }
       else {
         $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
       }
@@ -4159,8 +4293,8 @@ sub _date_convert {
   if($date =~ /^(\d{4}\-\d{2}\-\d{2})/) {
     $date = $1;
   }
-  elsif ($date =~ /^(\d{2})\.(\d{2})\.(\d{4})/) {
-    $date = "$3-$2-$1";
+  elsif ($date =~ /^(\d{1,2})\.(\d{1,2})\.(\d{4})/) {
+    $date = sprintf("%d-%02d-%02d", $3, $2, $1);
   }
 
   return $date;
