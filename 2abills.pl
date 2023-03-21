@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.35
-  UPDATE: 20230209
+  VERSION: 1.37
+  UPDATE: 20230319
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.35;
+my $VERSION = 1.37;
 our (%conf);
 
 #DB information
@@ -2851,14 +2851,14 @@ sub get_nodeny {
           $logins_hash{$LOGIN}{'9.TP_NAMES'} = join(',', @$services);
         }
       }
-      # elsif ($query_fields->[$i] eq 'address_street') {
-      #   if ($row[$i] && $row[$i] =~ /(.+)вул.(.+)/) {
-      #     my $city = $1;
-      #     my $street = $2;
-      #     $logins_hash{$LOGIN}{'3.ADDRESS_STREET'} = $street;
-      #     $logins_hash{$LOGIN}{'3.CITY'} = $city;
-      #   }
-      # }
+      elsif ($query_fields->[$i] eq 'address_street') {
+        if ($row[$i] && $row[$i] =~ /(.+)\s?вул.\s?(.+)/) {
+          my $city = $1;
+          my $street = $2;
+          $logins_hash{$LOGIN}{'3.ADDRESS_STREET'} = $street;
+          $logins_hash{$LOGIN}{'3.CITY'} = $city;
+        }
+      }
       else {
         $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
       }
@@ -4367,27 +4367,40 @@ sub get_lanbilling {
 
   use utf8;
   my %fields = (
-    "LOGIN"           => "IF(u.type=1, v.login, LOWER(LEFT(IFNULL(u.login, ''), 20))) AS login",
-    "PASSWORD"        => "IF(u.type=1, v.pass, IFNULL(u.pass, 'lanbill_password')) AS password",
-    "1.ACTIVATE"      => "IFNULL(cn.date, '0000-00-00') AS registration_1",
+    "LOGIN"                    => "IF(u.type=1, v.login, LOWER(LEFT(IFNULL(u.login, ''), 20))) AS login",
+    "PASSWORD"                 => "IF(u.type=1, v.pass, IFNULL(u.pass, 'lanbill_password')) AS password",
+    "1.ACTIVATE"               => "IFNULL(cn.date, '0000-00-00') AS registration_1",
     #    "1.EXPIRE"        => "",
     #    "1.COMPANY_ID"    => "",
-    "1.CREDIT"        => "cn.credit AS credit",
+    "1.CREDIT"                 => "cn.credit AS credit",
     #    "1.CREDIT_DATE"   => "",
-    "1.GID"           => "us.group_id AS group_id",
-    "1.GID_NAME"      => "us.name AS group_name",
+    "1.GID"                    => "us.group_id AS group_id",
+    "1.GID_NAME"               => "us.name AS group_name",
     #    "1.DISABLE"       => "",
-    "1.REGISTRATION"  => "IFNULL(cn.date, '0000-00-00') AS registration_2",
-    "1.UID"           => "IF(u.type=1, '', u.uid) AS uid",
+    "1.REGISTRATION"           => "IFNULL(cn.date, '0000-00-00') AS registration_2",
+    "1.UID"                    => "IF(u.type=1, '', u.uid) AS uid",
 
-    '3._COMPANY'      => 'u.type AS _company',
-    '1.COMPANY_NAME'  => "IF(u.type=1, u.name, '') AS company_name",
+    '3._COMPANY'               => 'u.type AS _company',
+    '1.COMPANY_NAME'           => "IF(u.type=1, u.name, '') AS company_name",
 
-    "3.ADDRESS_BUILD" => "IFNULL(adr_b.name,'') AS building",
-    "3.ADDRESS_FLAT"  => "IFNULL(adr_f.name,'') AS flat",
-    "3.ADDRESS_STREET"=> "IFNULL(adr_s.name,'') AS street",
-    "3.ADDRESS_FULL"  => "IFNULL(adr.address,'') AS address",
-    "3.COMMENTS"      => "u.descr AS comments",
+    # Company addr
+    "1.COMPANY_ADDRESS_BUILD"  => "IFNULL(adr_b.name,'') AS company_building",
+    "1.COMPANY_ADDRESS_FLAT"   => "IFNULL(adr_f.name,'') AS company_flat",
+    "1.COMPANY_ADDRESS_STREET" => "IFNULL(adr_s.name,'') AS company_street",
+    "1.COMPANY_ADDRESS_FULL"   => "IFNULL(adr.address,'') AS company_address",
+    "1.COMPANY_ZIP"            => "IFNULL(adr_b.idx,'') AS company_idx",
+    "1.COMPANY_CITY"           => "IFNULL(adr_c.name,'') AS company_city",
+    "1.COMPANY_COMMENTS"       => "ac.descr AS company_comments",
+
+    #Users / Company Subcompany login addr
+    "3.ADDRESS_BUILD" => "IF(u.type=1, vg_adr_b.name, IFNULL(adr_b.name,'')) AS building",
+    "3.ADDRESS_FLAT"  => "IF(u.type=1, vg_adr_f.name, IFNULL(adr_f.name,'')) AS flat",
+    "3.ADDRESS_STREET"=> "IF(u.type=1, vg_adr_s.name, IFNULL(adr_s.name,'')) AS street",
+    "3.ADDRESS_FULL"  => "IF(u.type=1, vg_addr.address, IFNULL(adr.address,'')) AS address",
+    "3.ZIP"           => "IF(u.type=1, vg_adr_b.idx, IFNULL(adr_b.idx,'')) AS idx",
+    "3.CITY"          => "IF(u.type=1, vg_adr_c.name, IFNULL(adr_c.name,'')) AS city",
+
+    "3.COMMENTS"      => "IF(u.type=1, v.descr, u.descr) AS comments",
     "3.CONTRACT_ID"   => "IFNULL(cn.number, '0') AS contract_id",
     "3.CONTRACT_DATE" => "IFNULL(cn.date, '0000-00-00') AS registration_3",
     "3._CODE"         => "IFNULL(cn.code, '') AS _code",
@@ -4401,10 +4414,8 @@ sub get_lanbilling {
     "3.PASPORT_GRANT" => "IFNULL(CONCAT(ac.pass_issuedep,' ',ac.pass_issueplace),'') AS pass_issuedepart",
     "3.BIRTH_DATE"    => 'u.birthdate AS birthdate',
     "3.TAX_NUMBER"    => "IFNULL(ac.inn, '') AS inn",
-    "3.ZIP"           => "IFNULL(adr_b.idx,'') AS idx",
-    "3.CITY"          => "IFNULL(adr_c.name,'') AS city",
 
-    "4.CID"           => "IFNULL(de1.value, '') AS cid",
+    #"4.CID"           => "IFNULL(de1.value, '') AS cid",
     "4.IP"            => "INET_NTOA(CONV(SUBSTR(HEX(s.segment),25,8),16,10)) AS ip",
     "4.NETMASK"       => "INET_NTOA(CONV(SUBSTR(HEX(s.mask),25,8),16,10)) as nas_mask",
     #    "4.TP_ID"         => "",
@@ -4412,6 +4423,9 @@ sub get_lanbilling {
     "4.TP_NAME"       => "LEFT(t.descr, 60) AS tp_name",
     #"4.STATUS"        => "tp_status",
     "4.PORT"          =>  "po.name AS port",  # "po.port_id AS port",
+    "4.COMMENTS"      =>  "po.comment AS internet_comments",  # "po.port_id AS port",
+    #
+
     #"4.NAS_IP"        => "INET_NTOA(CONV(SUBSTR(HEX(s.segment),25,8),16,10)) AS nas_ip",
     #"4.NAS_MAC"      => "INET_NTOA(CONV(SUBSTR(HEX(s.segment),25,8),16,10)) AS nas_ip",
     #    "4.NAS_NAME"      => "",
@@ -4469,12 +4483,22 @@ sub get_lanbilling {
     LEFT JOIN usergroups us ON (uss.group_id = us.group_id)
     LEFT JOIN agreements cn ON (u.uid = cn.uid)
     LEFT JOIN accounts ac ON (u.uid = ac.uid)
+
     LEFT JOIN accounts_addr adr ON (u.uid = adr.uid)
     LEFT JOIN address_city adr_c ON (adr.city = adr_c.record_id)
     LEFT JOIN address_street adr_s ON (adr.street = adr_s.record_id)
     LEFT JOIN address_building adr_b ON (adr.building = adr_b.record_id)
     LEFT JOIN address_flat adr_f ON (adr.flat = adr_f.record_id)
+
     INNER JOIN vgroups v ON (u.uid = v.uid AND v.archive=0)
+
+    LEFT JOIN vgroups_addr vg_addr ON (vg_addr.vg_id = v.vg_id)
+    LEFT JOIN address_city vg_adr_c ON (vg_addr.city = vg_adr_c.record_id)
+    LEFT JOIN address_street vg_adr_s ON (vg_addr.street = vg_adr_s.record_id)
+    LEFT JOIN address_building vg_adr_b ON (vg_addr.building = vg_adr_b.record_id)
+    LEFT JOIN address_flat vg_adr_f ON (vg_addr.flat = vg_adr_f.record_id)
+
+
     LEFT JOIN tarifs t ON (t.tar_id = v.tar_id)
     LEFT JOIN ports po ON (v.vg_id = po.vg_id)
     LEFT JOIN devices de ON (de.device_id = po.device_id)
@@ -4538,6 +4562,7 @@ sub get_lanbilling {
         }
         else {
           $logins_hash{$LOGIN . '__2'}{$field_id} = $val;
+          `echo "extra login $LOGIN" >> extra_login.txt`;
         }
       }
       else {
