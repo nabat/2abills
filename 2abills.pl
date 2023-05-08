@@ -31,8 +31,8 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.37
-  UPDATE: 20230319
+  VERSION: 1.42
+  UPDATE: 20230508
 
 =cut
 
@@ -42,7 +42,7 @@ use FindBin '$Bin';
 use Encode;
 
 my $argv = parse_arguments(\@ARGV);
-my $VERSION = 1.37;
+my $VERSION = 1.42;
 our (%conf);
 
 #DB information
@@ -64,7 +64,7 @@ my $EXCHANGE_RATE = $argv->{EXCHANGE_RATE} || 0;
 my $FORMAT        = ($argv->{'HTML'}) ? 'html' : '';
 my $SYNC_DEPOSIT  = $argv->{SYNC_DEPOSIT} || 0;
 my %EXTENDED_STATIC_FIELDS = ();
-my $debug         = $argv->{DEBUG} || 0;
+
 
 while (my ($k, $v) = each(%$argv)) {
   if ($k =~ /^(\d)\./) {
@@ -99,7 +99,9 @@ if ($from) {
     $argv->{DB_TYPE} = 'ODBC';
   }
 
-  if($from ne 'file'){
+  if ($from eq 'mikrotik') {
+  }
+  elsif($from ne 'file'){
     $db = db_connect({ %$argv });
   }
 }
@@ -142,6 +144,9 @@ if ($from) {
   }
   elsif ($from eq 'unisys') {
     $INFO_LOGINS = get_unisys();
+  }
+  elsif ($from eq 'mikrotik') {
+    $INFO_LOGINS = get_mikrotik();
   }
   elsif ($from eq 'file') {
     if ($SYNC_DEPOSIT) {
@@ -222,7 +227,7 @@ if ($from) {
     $INFO_LOGINS = &{\&{'get_'.$from}}();
   }
   elsif (defined(\&{$from})) {
-    if($debug > 4) {
+    if($DEBUG > 4) {
       print "Custom function: $from\n";
     }
 
@@ -984,7 +989,7 @@ sub get_file {
 
   @FILE_FIELDS = split(/,/, $FILE_FIELDS);
 
-  if ($debug > 2) {
+  if ($DEBUG > 2) {
     print "File fields: ". join(',', @FILE_FIELDS) ."\n";
   }
 
@@ -1034,7 +1039,7 @@ sub get_file {
         #        $tmp_hash{'3.ADDRESS_STREET'}=$1;
         #        $tmp_hash{'3.ADDRESS_BUILD'}=$2;
         #        $tmp_hash{'3.ADDRESS_FLAT'}=$3;
-        #        print "Street: $tmp_hash{'3.ADDRESS_STREET'} / $tmp_hash{'3.ADDRESS_BUILD'} /$tmp_hash{'3.ADDRESS_FLAT'} \n" if ($debug > 0);
+        #        print "Street: $tmp_hash{'3.ADDRESS_STREET'} / $tmp_hash{'3.ADDRESS_BUILD'} /$tmp_hash{'3.ADDRESS_FLAT'} \n" if ($DEBUG > 0);
         #        #exit;
         #      }
       }
@@ -1594,16 +1599,19 @@ sub get_freenibs_users {
 
   Returns: 
     @columns
+
 =cut
 #**********************************************************
 sub all_columns {
   my ($logins_info) = @_;
   my %columns;
+
   foreach my $login (values %$logins_info){
-    foreach(sort keys %$login){
-      $columns{$_}=1;
+    foreach my $col_name (sort keys %$login){
+      $columns{$col_name}=1;
     }
   };
+
   return (sort keys %columns);
 }
 
@@ -1713,6 +1721,12 @@ sub show {
 
       $output .= "$logins_info->{$login_}{'LOGIN'}\t" . (($logins_info->{$login_}{'PASSWORD'}) ? $logins_info->{$login_}{'PASSWORD'} : '-') . "\t";
 
+      # foreach my $column_title (sort @titles) {
+      #   print "$column_title\n";
+      # }
+      # print "\ncount: $#titles\n";
+      #
+      # exit;
       foreach my $column_title (@titles) {
         next if ($exaption{$column_title});
 
@@ -2461,7 +2475,7 @@ sub mikbill_pools {
     CONCAT(iface, '/', sectorid), 1, 253
    FROM sectors;";
 
-  if ($debug > 3) {
+  if ($DEBUG > 3) {
     print $sql;
   }
 
@@ -2475,7 +2489,7 @@ sub mikbill_pools {
 #**********************************************************
 sub mikbill_payments {
 
-  if ($debug > 1) {
+  if ($DEBUG > 1) {
     print "Plugin: mikbill_payments \n";
   }
 
@@ -2506,14 +2520,14 @@ ORDER BY date;
     my $uid = $login2uid->{$row->{login}}{UID} || 0;
     my $bill_id = $login2uid->{$row->{login}}{BILL_ID} || 0;
 
-    if ($debug > 1) {
+    if ($DEBUG > 1) {
       print "LOGIN: $row->{login} UID: $uid BILL_ID: $bill_id SUM: $row->{sum} DATE: $row->{date}\n";
     }
 
     my $insert_query = "INSERT INTO payments (uid, bill_id, sum, date, ext_id)
      VALUES ($uid, $bill_id, '$row->{sum}', '$row->{date}', 'migrate: $row->{id}');";
 
-    if ($debug > 1) {
+    if ($DEBUG > 1) {
       print "$insert_query\n";
     }
     $db_abills->do($insert_query);
@@ -2608,17 +2622,17 @@ sub get_nodeny {
     '11.CHANGE_TP_NAME', => 'next_paket3',
     #'11.CHANGE_TP_DATE'  => '',
 
-    '3.SPEED_IN'  => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
+    '3.SPEED_IN'   => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
     '3.SPEED_OUT'  => "MAX(IF (v.dopfield_id = 2, v.field_value, '')) AS _speed_out",
-    '3._TCP_24'  => "MAX(IF (v.dopfield_id = 3, v.field_value, '')) AS _tcp_25",
-    '4.CID'  => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
-    '3._FIELD_5'  => "MAX(IF (v.dopfield_id = 5, v.field_value, '')) AS field_5",
-    '3.ADDRESS_STREET'  => "MAX(IF (v.dopfield_id = 5, s.name_street, ''))  AS address_street",
-    '3.ADDRESS_BUILD'  => "MAX(IF (v.dopfield_id = 6, v.field_value, '')) AS address_build",
-    '3._DOFIELD_7'  => "MAX(IF (v.dopfield_id = 7, v.field_value, '')) AS field_7",
+    '3._TCP_24'    => "MAX(IF (v.dopfield_id = 3, v.field_value, '')) AS _tcp_25",
+    '4.CID'        => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
+    '3._FIELD_5'   => "MAX(IF (v.dopfield_id = 5, v.field_value, '')) AS field_5",
+    '3.ADDRESS_STREET'=> "MAX(IF (v.dopfield_id = 5, s.name_street, ''))  AS address_street",
+    '3.ADDRESS_BUILD' => "MAX(IF (v.dopfield_id = 6, v.field_value, '')) AS address_build",
+    '3._DOFIELD_7'    => "MAX(IF (v.dopfield_id = 7, v.field_value, '')) AS field_7",
     '3.ADDRESS_FLAT'  => "MAX(IF (v.dopfield_id = 8, v.field_value, '')) AS address_flat",
-    '3.PHONE'  => "MAX(IF (v.dopfield_id = 9, v.field_value, '')) AS phone",
-    '3._COMMENTS'  => "MAX(IF (v.dopfield_id = 10, v.field_value, '')) AS comments",
+    '3.PHONE'         => "MAX(IF (v.dopfield_id = 9, v.field_value, '')) AS phone",
+    '3._COMMENTS'     => "MAX(IF (v.dopfield_id = 10, v.field_value, '')) AS comments",
 
        '3._CHECK_LINE'  => "MAX(IF (v.dopfield_id = 14, v.field_value, '')) AS check_line",
        '3.PASPORT_NUM'  => "MAX(IF (v.dopfield_id = 15, v.field_value, '')) AS passport_num",
@@ -2751,7 +2765,7 @@ sub get_nodeny {
   );
 
   my %fields_rev = reverse(%fields);
-  my $fields_list = "u.name, " . join(", \n", values(%fields));
+  my $fields_list = "u.name, " . join(", \n", sort values(%fields));
 
   foreach my $key (keys %fields_rev) {
     $key =~ /([a-z\_0-9]+)$/i;
@@ -2798,6 +2812,7 @@ sub get_nodeny {
   ";
   }
 
+  #print $fields_list;
   my $sql = "SELECT $fields_list
     FROM users u
     LEFT OUTER JOIN dopvalues v ON (v.parent_id=u.id)
@@ -2840,9 +2855,9 @@ sub get_nodeny {
   while (my @row = $q->fetchrow_array()) {
     my $LOGIN = $row[0];
 
-    for (my $i = 1; $i < $#row; $i++) {
+    for (my $i = 0; $i <= $#row; $i++) {
       if ($DEBUG > 3) {
-        print "$i, $query_fields->[$i], " . ($fields_rev{$query_fields->[$i]} || q{}). " ->  ". ($row[$i]  || q{}) ."\n";
+        print "$i FIELD: $query_fields->[$i], " . ($fields_rev{$query_fields->[$i]} || q{}). " ->  ". ($row[$i]  || q{}) ."\n";
       }
 
       if ($query_fields->[$i] eq 'srvs') {
@@ -4593,6 +4608,49 @@ sub get_lanbilling {
   #}
 
   undef($q);
+  return \%logins_hash;
+}
+
+#**********************************************************
+=head2 get_mikrotik($attr) -  Export from mikrotik
+
+  Arguments:
+
+  Results:
+
+=cut
+#**********************************************************
+sub get_mikrotik {
+
+  my $content = q{};
+  my $filename = $ARGV[0] || q{};
+  if (open(my $fh, '<', "$filename")) {
+    while(<$fh>) {
+      $content .= $_;
+    }
+    close($fh);
+  }
+  else {
+    die "Can't open file '$filename' $!\n";
+  }
+
+  if($DEBUG > 2) {
+    print $content;
+  }
+
+  while($content =~ m/\s{0,2}(\d+)\s+;;;\s+(.+)\n\s+(\w+)\s+(\w+)\s+(.+)\s+(\w+)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+/gi) {
+    my $num = $1;
+    my $comments = $2;
+    my $login = $3;
+    my $service = $4;
+    my $password = $5;
+    my $profile = $6;
+    my $remote_address = $7;
+    print "$num LOGIN: $login SERVICE: $service PASSWD: $password Profile: $profile IP: $remote_address COMMENTS: $comments\n";
+  }
+
+  my %logins_hash = ();
+
   return \%logins_hash;
 }
 
