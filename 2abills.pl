@@ -31,7 +31,7 @@ use warnings;
 
 =head1 VERSION
 
-  VERSION: 1.42
+  VERSION: 1.43
   UPDATE: 20230508
 
 =cut
@@ -187,6 +187,9 @@ if ($from) {
   elsif ($from eq 'nodeny') {
     $INFO_LOGINS = get_nodeny();
   }
+  elsif ($from eq 'nodeny_plus') {
+    $INFO_LOGINS = get_nodeny_plus();
+  }
   elsif ($from eq 'traffpro') {
     $INFO_LOGINS = get_traffpro();
   }
@@ -311,7 +314,7 @@ ABillS not installed\n";
     else {
       $_db = DBI->connect("dbi:$dbtype:DSN=$db_dsn;UID=$dbuser;PWD=$dbpasswd")
         or die "Unable connect to server '$dbtype:dbname=$dbname;host=$dbhost'\n user: $dbuser \n password: $dbpasswd \n$!\n"
-        . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword - ' . $dbpasswd
+        . ' dbname: ' . $dbname . ' dbuser: ' . $dbuser . ' dbpassword: ' . $dbpasswd
         . "\n" . $DBI::errstr . "\n" . $DBI::state . "\n" . $DBI::err . "\n" . $DBI::rows
         . "\nUSE:\n\n  DB_HOST=  DB_USER= DB_PASSWORD= DB_CHARSET= DB_NAME=  \n";
     }
@@ -2829,6 +2832,235 @@ sub get_nodeny {
        v.line_id IS NULL
       )
       $WHERE
+    GROUP BY u.id
+    ORDER BY u.id
+  ";
+  #`echo "$sql" >> /tmp/sql`;
+  #print $sql;
+  if ($DEBUG > 4) {
+    print $sql;
+    return 0;
+  }
+  elsif ($DEBUG > 0) {
+    print "$sql\n";
+  }
+
+
+  $db->do("SET SQL_BIG_SELECTS=1");
+
+  my DBI $q = $db->prepare($sql);
+  $q->execute();
+  my $query_fields = $q->{NAME};
+
+  #my $output = '';
+  my %logins_hash = ();
+
+  while (my @row = $q->fetchrow_array()) {
+    my $LOGIN = $row[0];
+
+    for (my $i = 0; $i <= $#row; $i++) {
+      if ($DEBUG > 3) {
+        print "$i FIELD: $query_fields->[$i], " . ($fields_rev{$query_fields->[$i]} || q{}). " ->  ". ($row[$i]  || q{}) ."\n";
+      }
+
+      if ($query_fields->[$i] eq 'srvs') {
+        my $services = get_dop_usluga($row[$i]);
+        if ($services && $#{ $services } > -1) {
+          $logins_hash{$LOGIN}{'9.TP_NAMES'} = join(',', @$services);
+        }
+      }
+      elsif ($query_fields->[$i] eq 'address_street') {
+        if ($row[$i] && $row[$i] =~ /(.+)\s?вул.\s?(.+)/) {
+          my $city = $1;
+          my $street = $2;
+          $logins_hash{$LOGIN}{'3.ADDRESS_STREET'} = $street;
+          $logins_hash{$LOGIN}{'3.CITY'} = $city;
+        }
+      }
+      else {
+        $logins_hash{$LOGIN}{ $fields_rev{ $query_fields->[$i] } } = $row[$i];
+      }
+    }
+
+    if ($logins_hash{$LOGIN}{'6.USERNAME'} && $logins_hash{$LOGIN}{'6.USERNAME'} =~ /(\S+)\@/) {
+      $logins_hash{$LOGIN}{'6.USERNAME'} = $1;
+    }
+    # elsif ($logins_hash{$LOGIN}{'3.COMMENTS'}) {
+    #   $logins_hash{$LOGIN}{'3.COMMENTS'} =~ s/\n//g;
+    # }
+
+    #Extended params
+    while (my ($k, $v) = each %EXTENDED_STATIC_FIELDS) {
+      $logins_hash{$LOGIN}{$k} = $v;
+    }
+
+  }
+
+  undef($q);
+  return \%logins_hash;
+}
+
+
+#**********************************************************
+=head2 get_nodeny() Export from Nodeny
+
+  49.xx
+  50.32
+
+=cut
+#**********************************************************
+sub get_nodeny_plus {
+
+  $encryption_key = "hardpass3" if (!$encryption_key);
+
+  my %fields = (
+    '1.UID',             => 'u.id',
+    'LOGIN'              => 'u.name',
+    'PASSWORD'           => "AES_DECRYPT(passwd, \'$encryption_key\') AS password",
+    '3.CONTRACT_DATE'    => 'DATE_FORMAT(FROM_UNIXTIME(contract_date), \'%Y-%m-%d\') AS activate',
+
+    #  '1.EXPIRE'			=> 'expired',
+    #  '1.COMPANY_ID'		=> '',
+    '1.CREDIT'           => "(SELECT IF(SUM(cash) IS NULL, 0, SUM(cash)) FROM pays WHERE category='1000' AND mid=u.id ORDER BY time DESC LIMIT 1) AS credit",
+    '1.CREDIT_DATE'      => "(SELECT IF(MAX(time) IS NULL, '', FROM_UNIXTIME(time)) FROM pays WHERE category='1000' AND mid=u.id ORDER BY time DESC LIMIT 1) AS credit_date",
+    '1.GID'              => 'u.grp',
+    '1.REDUCTION'        => 'u.discount',
+    #'3._STARTDAY'        => 'start_day',
+    #  '1.REGISTRATION'		=> 'add_date',
+    #  '1.DISABLE'			=> 'blocked',
+
+    #  '3.ADDRESS_FLAT'		=> 'app',
+    #  '3.ADDRESS_STREET'	=> 'address',
+    #  '3.ADDRESS_BUILD'		=> 'houseid',
+    '3.COMMENTS'         => 'u.comment',
+    '3.CONTRACT_ID'      => 'u.contract',
+
+    #  '3.EMAIL'				=> 'email',
+    '3.FIO'              => 'u.fio',
+
+    #  '5.PASPORT_GRANT'		=> 'passportserie',
+    #  '3.PHONE'				=> 'mob_tel',
+
+    #  '4.CID'				=> '',
+    #  '4.FILTER_ID'		=> '',
+    '4.IP'               => 'INET_NTOA(ip_pool.ip) AS ip',
+    #  '4.NETMASK'			=> 'framed_mask',
+    #  '4.SIMULTANEONSLY'	=> 'simultaneous_use',
+    #  '4.SPEED'			=> 'speed',
+    #'4.TP_ID'            => 'paket',
+    '4.TP_NAME'          => 's.title AS tp_name',
+    #  '4.CALLBACK'			=> 'allow_callback',
+    '5.SUM'              => "u.balance - (SELECT IF(SUM(cash) IS NULL, 0, SUM(cash)) FROM pays WHERE category='1000' AND mid=u.id ORDER BY time DESC LIMIT 1) AS sum",
+    '3._SUM1'            => "u.balance",
+    '3._SUM2'            => "(SELECT IF(SUM(cash) IS NULL, 0, SUM(cash)) FROM pays WHERE category='1000' AND mid=u.id ORDER BY time DESC LIMIT 1) AS _sum2",
+
+    #'3._EXTRA_SERVICE'   => 'u.srvs',
+    #'3._NEXT_PAKET'      => 'u.next_paket',
+    #'13.DATE'            => "if (next_paket>0, DATE_FORMAT(CURDATE()+INTERVAL 1 MONTH, '%Y-%m-01'), substring_index(pays.reason, ':', 1)) AS shedule_date",
+    #'13.TP_NAME'         => "if (next_paket>0, internet_tp_next.name, internet_tp_shedule.name) AS shedule_tp_name",
+    #'11.TP_ID'           => 'paket3',
+    #'11.TP_NAME'         => 'iptv_tp.name AS iptv_tp_name',
+    #'11.CHANGE_TP_NAME', => 'next_paket3',
+    #'11.CHANGE_TP_DATE'  => '',
+
+    # '3.SPEED_IN'   => "MAX(IF (v.dopfield_id = 1, v.field_value, '')) AS _speed_in",
+    # '3.SPEED_OUT'  => "MAX(IF (v.dopfield_id = 2, v.field_value, '')) AS _speed_out",
+    # '3._TCP_24'    => "MAX(IF (v.dopfield_id = 3, v.field_value, '')) AS _tcp_25",
+    # '4.CID'        => "MAX(IF (v.dopfield_id = 4, v.field_value, '')) AS mac",
+    # '3._FIELD_5'   => "MAX(IF (v.dopfield_id = 5, v.field_value, '')) AS field_5",
+    '3.CITY'          => "data0._adr_city AS city",
+    '3.ADDRESS_STREET'=> "data0._adr_street  AS address_street",
+    '3.ADDRESS_BUILD' => "data0._adr_house AS address_build",
+    # '3._DOFIELD_7'    => "MAX(IF (v.dopfield_id = 7, v.field_value, '')) AS field_7",
+     '3.ADDRESS_FLAT'  => "data0._adr_room AS address_flat",
+     '3.PHONE'         => "data0._adr_telefon AS phone",
+    # '3._COMMENTS'     => "MAX(IF (v.dopfield_id = 10, v.field_value, '')) AS comments",
+    #
+    # '3._CHECK_LINE'  => "MAX(IF (v.dopfield_id = 14, v.field_value, '')) AS check_line",
+    # '3.PASPORT_NUM'  => "MAX(IF (v.dopfield_id = 15, v.field_value, '')) AS passport_num",
+    # '3.TAX_NUMBER'  => "MAX(IF (v.dopfield_id = 16, v.field_value, '')) AS inn",
+    # '3.REG_ADDRESS'  => "MAX(IF (v.dopfield_id = 17, v.field_value, '')) AS reg_address",
+    # '3.EMAIL'  => "MAX(IF (v.dopfield_id = 19, v.field_value, '')) AS email",
+    # '3._PON'  => "MAX(IF (v.dopfield_id = 20, v.field_value, '')) AS _pon",
+    # '3.ADDRESS_BLOCK'  => "MAX(IF (v.dopfield_id = 21, v.field_value, '')) AS address_block",
+    # '3._SKIP_SMS'  => "MAX(IF (v.dopfield_id = 22, v.field_value, '')) AS skip_sms",
+    # '3._PHONE2'  => "MAX(IF (v.dopfield_id = 23, v.field_value, '')) AS phone2",
+    # '3._IPTV_MAC'  => "MAX(IF (v.dopfield_id = 24, v.field_value, '')) as iptv_mac",
+    # '3.SWITCH_PASSWORD'  => "MAX(IF (v.dopfield_id = 25, v.field_value, '')) AS switch_password",
+    # '3._PASPORT_INFO'  => "MAX(IF (v.dopfield_id = 27, v.field_value, '')) AS _pasport_info",
+    # '3._ADS_POINT'  => "MAX(IF (v.dopfield_id = 28, v.field_value, '')) AS _ads_point",
+    # '3._NEXT_IPTV_TP'  => "MAX(IF (v.dopfield_id = 29, v.field_value, '')) AS _next_iptv_tp",
+    # '3._MEDIA_PLAYER'  => "MAX(IF (v.dopfield_id = 30, v.field_value, '')) AS _media_player",
+    # '3._ROUTER'  => "MAX(IF (v.dopfield_id = 31, v.field_value, '')) AS _router",
+    # '3._NEXT_INTERNET_TP'  => "MAX(IF (v.dopfield_id = 32, v.field_value, '')) AS next_internet_tp",
+    # '3._CONNECT_PRICE'  => "MAX(IF (v.dopfield_id = 33, v.field_value, '')) AS _connect_price",
+    # '3._BUILD_TYPE'  => "MAX(IF (v.dopfield_id = 34, v.field_value, ''))  AS _build_type",
+    # '3._USER_TYPE'  => "MAX(IF (v.dopfield_id = 35, v.field_value, '')) AS _user_type",
+    # '3._REFERRER'  => "MAX(IF (v.dopfield_id = 36, v.field_value, '')) AS _referrer",
+    # '3._IPTV_TP'  => "MAX(IF (v.dopfield_id = 37, v.field_value, '')) AS _iptv_tp",
+    # '3._SPEED_CONNECT'  => "MAX(IF (v.dopfield_id = 38, v.field_value, '')) AS _speed_connect",
+    # '3._CPE_UNITS'  => "MAX(IF (v.dopfield_id = 39, v.field_value, '')) AS _cpe_units",
+  );
+
+  my %fields_rev = reverse(%fields);
+  my $fields_list = "u.name, " . join(", \n", sort values(%fields));
+
+  foreach my $key (keys %fields_rev) {
+    $key =~ /([a-z\_0-9]+)$/i;
+    $fields_rev{$1}=$fields_rev{$key};
+  }
+
+  my $WHERE = q{};
+
+  if ($argv->{ID} && $argv->{ID}=~/(\d+)\-(\d+)/) {
+    $WHERE .= qq{ AND ( u.id >= $1 AND u.id <= $2 )  };
+  }
+  elsif($argv->{LOGIN}) {
+    if ($argv->{LOGIN} =~ /,/) {
+      my @logins = split(/,\s?/, $argv->{LOGIN});
+      $WHERE .= " AND u.name IN ('". join("', '", @logins)  ."') ";
+    }
+    else {
+      $WHERE .= qq{ AND u.name = '$argv->{LOGIN}' };
+    }
+  }
+  elsif($argv->{NOT_GRP} && $argv->{NOT_GRP}) {
+    $WHERE .= qq{ AND ( u.grp NOT IN ($argv->{NOT_GRP})  )  };
+  }
+  elsif($argv->{GROUP_ID}) {
+    $WHERE .= qq{ AND ( u.grp IN ($argv->{GROUP_ID})  )  };
+  }
+
+  my $EXT_TABLES = q{};
+  if ($fields{'4.SERVER_VLAN'}) {
+    $EXT_TABLES .= "LEFT JOIN vlan2user ON (vlan2user.id=u.id) \n";
+    $EXT_TABLES .= "LEFT JOIN p_switch_f switch ON (switch.switch=u.switch) \n";
+    $EXT_TABLES .= "LEFT JOIN regions r ON (r.id=s.region)\n";
+  }
+
+  if ($fields{'11.TP_NAME'} && $fields{'11.TP_NAME'} =~ /iptv_megogo/) {
+    $EXT_TABLES .= "LEFT JOIN hlstv_device iptv_device ON (iptv_device.mid=u.id) \n";
+    $EXT_TABLES .= "LEFT JOIN usrvs iptv_megogo ON (iptv_megogo.mid=u.id AND iptv_megogo.date_k > unix_timestamp()) \n";
+    #hlstv_packet
+  }
+
+  # if ($fields{'13.TP_NAME'}) {
+  #   $EXT_TABLES .= "LEFT JOIN pays ON (pays.mid=u.id AND pays.category = '431')
+  # LEFT JOIN plans2 internet_tp_shedule ON (internet_tp_shedule.id=substring_index(pays.reason, ':', -1))
+  # ";
+  # }
+
+  #print $fields_list;
+  my $sql = "SELECT $fields_list
+    FROM users u
+    LEFT JOIN users_services us ON (us.uid=u.id)
+    LEFT JOIN services s ON (s.service_id=us.service_id)
+    LEFT JOIN user_grp ON (user_grp.grp_id=u.grp)
+    LEFT JOIN ip_pool ON (ip_pool.uid=u.id)
+    LEFT JOIN data0 ON (data0.uid=u.id)
+
+    $EXT_TABLES
+    $WHERE
     GROUP BY u.id
     ORDER BY u.id
   ";
